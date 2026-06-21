@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0F172A;
+    --bg-secondary: #1E293B;
+    --bg-tertiary: #334155;
+  }
+
+  body {
+    @apply bg-[#0F172A] text-slate-100 font-sans antialiased;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-800;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-600 rounded-full;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-[#1E293B] rounded-2xl border border-slate-700/50;
+  }
+
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-500 text-white font-semibold px-5 py-2.5 rounded-xl
+           transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 
+           focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-[#0F172A];
+  }
+
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium px-5 py-2.5 rounded-xl
+           transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2
+           focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-[#0F172A];
+  }
+
+  .btn-success {
+    @apply bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl
+           transition-all duration-200 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium px-5 py-2.5 rounded-xl
+           border border-red-500/30 transition-all duration-200 active:scale-95;
+  }
+
+  .input-field {
+    @apply bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-slate-100
+           placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500
+           focus:border-transparent transition-all duration-200 font-mono text-lg w-full;
+  }
+
+  .node-locked {
+    @apply opacity-50 cursor-not-allowed border-slate-700 bg-slate-800/50;
+  }
+
+  .node-progress {
+    @apply border-violet-500/50 bg-gradient-to-br from-violet-500/10 to-violet-600/5;
+  }
+
+  .node-completed {
+    @apply border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5;
+  }
+
+  .node-exam-ready {
+    @apply border-violet-400 bg-gradient-to-br from-violet-500/15 to-violet-600/10
+           shadow-lg shadow-violet-500/20;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent;
+  }
+
+  .glow-violet {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  }
+}
