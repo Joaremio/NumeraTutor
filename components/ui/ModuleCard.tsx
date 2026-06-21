@@ -52,7 +52,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
             </Link>
             {completedNodes === 3 && (
               <Link
-                href={`/tutoria/module}`}
+                href={`/exame/${module.id}`}
                 className="mt-1  text-center text-xs font-medium text-slate-400 hover:text-violet-400
              py-1.5 px-3 rounded-lg border border-slate-700 hover:border-violet-500/50
              transition-all duration-200"
