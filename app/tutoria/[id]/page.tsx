@@ -93,6 +93,24 @@ export default async function TutoringPage({
                     </li>
                   );
                 })}
+                <li className="pt-2 mt-2 border-t border-slate-800">
+                  <Link
+                    href={`/questoes`}
+                    className="
+        flex w-full items-center justify-center
+        rounded-xl px-4 py-3
+        text-sm font-semibold
+        text-white
+        bg-gradient-to-r from-violet-600 to-indigo-600
+        hover:from-violet-500 hover:to-indigo-500
+        transition-all duration-200
+        shadow-lg shadow-violet-500/20
+        active:scale-95
+      "
+                  >
+                    Ir para desafio
+                  </Link>
+                </li>
               </ul>
             </nav>
           </aside>

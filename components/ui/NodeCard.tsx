@@ -10,7 +10,7 @@ interface NodeCardProps {
   moduleNumber: number;
 }
 
-export default function NodeCard({ node, moduleNumber }: NodeCardProps) {
+export default function NodeCard({ node }: NodeCardProps) {
   const isLocked = node.status === "locked";
   const isCompleted = node.status === "completed";
   const isExamReady = node.proficiency >= 80 && node.status === "in_progress";
@@ -31,18 +31,6 @@ export default function NodeCard({ node, moduleNumber }: NodeCardProps) {
     >
       {/* Node ID badge + status */}
       <div className="flex items-center justify-between">
-        <span
-          className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-md ${
-            isLocked
-              ? "bg-slate-700 text-slate-500"
-              : isCompleted
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-violet-500/20 text-violet-400"
-          }`}
-        >
-          Nó {node.id}
-        </span>
-
         {isCompleted && (
           <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
             Concluído
@@ -86,30 +74,6 @@ export default function NodeCard({ node, moduleNumber }: NodeCardProps) {
             />
           </div>
         </div>
-      )}
-
-      {/* Exam CTA */}
-      {isExamReady && (
-        <Link
-          href="/exame"
-          className="mt-1 w-full text-center text-xs font-semibold bg-gradient-to-r from-violet-600 to-violet-500
-                     hover:from-violet-500 hover:to-indigo-500 text-white py-2 px-3 rounded-lg
-                     transition-all duration-200 active:scale-95 shadow-lg shadow-violet-500/25 glow-violet"
-        >
-          Realizar Exame do Módulo →
-        </Link>
-      )}
-
-      {/* Practice button */}
-      {!isLocked && !isCompleted && !isExamReady && (
-        <Link
-          href={`/tutoria/module-${moduleNumber}`}
-          className="mt-1 w-full text-center text-xs font-medium text-slate-400 hover:text-violet-400
-             py-1.5 px-3 rounded-lg border border-slate-700 hover:border-violet-500/50
-             transition-all duration-200"
-        >
-          Iniciar
-        </Link>
       )}
     </div>
   );

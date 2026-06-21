@@ -41,14 +41,26 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
               <p className="text-xs text-slate-500 mt-0.5">{module.subtitle}</p>
             </div>
           </div>
-          <Link
-            href={`/tutoria/module}`}
-            className="mt-1  text-center text-xs font-medium text-slate-400 hover:text-violet-400
+          <div className="flex gap-2">
+            <Link
+              href={`/tutoria/module-${module.number}`}
+              className="mt-1  text-center text-xs font-medium text-slate-400 hover:text-violet-400
              py-1.5 px-3 rounded-lg border border-slate-700 hover:border-violet-500/50
              transition-all duration-200"
-          >
-            Ir para módulo
-          </Link>
+            >
+              Ir para módulo
+            </Link>
+            {completedNodes === 3 && (
+              <Link
+                href={`/tutoria/module}`}
+                className="mt-1  text-center text-xs font-medium text-slate-400 hover:text-violet-400
+             py-1.5 px-3 rounded-lg border border-slate-700 hover:border-violet-500/50
+             transition-all duration-200"
+              >
+                Realizar teste
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Nodes grid */}
