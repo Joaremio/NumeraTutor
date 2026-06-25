@@ -1,20 +1,33 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
+import { MODULES } from "@/lib/domain";
 
 // <FeedbackToast /> — Immediate feedback notification (Behaviorism)
 export type FeedbackType = "correct" | "error" | "hint" | null;
 
+function getNodeInfo(nodeId: string) {
+  for (const module of MODULES) {
+    for (const node of module.nodes) {
+      if (node.id === nodeId) return { moduleId: module.id, node, moduleNumber: module.number };
+    }
+  }
+  return null;
+}
+
 interface FeedbackToastProps {
   type: FeedbackType;
   onClose: () => void;
+  proficiency?: number;
+  nodeId?: string;
 }
 
 const FEEDBACK_CONFIG = {
   correct: {
     icon: "✓",
     title: "Resposta correta!",
-    subtitle: "+5% de proficiência adicionados.",
+    subtitle: (p: number) => `Proficiência atual: ${p}%`,
     bg: "bg-emerald-500/15 border-emerald-500/40",
     icon_bg: "bg-emerald-500/20",
     icon_color: "text-emerald-400",
@@ -24,7 +37,7 @@ const FEEDBACK_CONFIG = {
   error: {
     icon: "✕",
     title: "Resposta incorreta.",
-    subtitle: "−5% de proficiência subtraídos. Tente novamente.",
+    subtitle: (p: number) => `Proficiência atual: ${p}%`,
     bg: "bg-red-500/15 border-red-500/40",
     icon_bg: "bg-red-500/20",
     icon_color: "text-red-400",
@@ -34,7 +47,7 @@ const FEEDBACK_CONFIG = {
   hint: {
     icon: "💡",
     title: "Dica utilizada.",
-    subtitle: "−5% de proficiência subtraídos.",
+    subtitle: (p: number) => `Proficiência atual: ${p}%`,
     bg: "bg-orange-500/15 border-orange-500/40",
     icon_bg: "bg-orange-500/20",
     icon_color: "text-orange-400",
@@ -43,7 +56,7 @@ const FEEDBACK_CONFIG = {
   },
 };
 
-export default function FeedbackToast({ type, onClose }: FeedbackToastProps) {
+export default function FeedbackToast({ type, onClose, proficiency = 0, nodeId }: FeedbackToastProps) {
   useEffect(() => {
     if (!type) return;
     const timer = setTimeout(onClose, 3500);
@@ -65,7 +78,20 @@ export default function FeedbackToast({ type, onClose }: FeedbackToastProps) {
       </div>
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold ${cfg.text}`}>{cfg.title}</p>
-        <p className="text-xs text-slate-400 mt-0.5">{cfg.subtitle}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{cfg.subtitle(proficiency)}</p>
+        {type === "error" && nodeId && (() => {
+          const info = getNodeInfo(nodeId);
+          if (!info) return null;
+          return (
+            <Link
+              href={`/tutoria/${info.moduleId}?node=${nodeId}`}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors"
+              onClick={onClose}
+            >
+              → Reveja &ldquo;{info.node.label}&rdquo; (Nó {nodeId})
+            </Link>
+          );
+        })()}
         {/* Auto-close bar */}
         <div className="mt-2 h-0.5 bg-slate-700 rounded-full overflow-hidden">
           <div

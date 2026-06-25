@@ -1,61 +1,119 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import AppHeader from "@/components/layout/AppHeader";
 import HintPanel from "@/components/ui/HintPanel";
 import FeedbackToast, { FeedbackType } from "@/components/ui/FeedbackToast";
 import NodeProgressCircle from "@/components/ui/NodeProgressCircle";
 import { QUESTIONS } from "@/lib/domain-questions";
+import { MODULES } from "@/lib/domain";
+import { useProficiency } from "@/hooks/useProficiency";
+import type { Question } from "@/lib/domain";
 
-// <TutoringPage /> — Interactive problem-solving environment
+function getNodeInfo(nodeId: string) {
+  for (const module of MODULES) {
+    for (const node of module.nodes) {
+      if (node.id === nodeId) return { module, node };
+    }
+  }
+  return null;
+}
+
+function selectNextQuestion(
+  solvedIds: Set<string>,
+  getProficiency: (nodeId: string) => number,
+  questions: Question[],
+  excludeId?: string,
+): Question | null {
+  const unsolved = questions.filter(
+    (q) => !solvedIds.has(q.id) && q.id !== excludeId,
+  );
+  if (unsolved.length === 0) return null;
+
+  const scored = unsolved.map((q) => {
+    const nodeProf = getProficiency(q.nodeId);
+    let difficultyScore = 0;
+    if (nodeProf < 40 && q.difficulty === "easy") difficultyScore = 3;
+    else if (nodeProf >= 40 && nodeProf <= 70 && q.difficulty === "medium")
+      difficultyScore = 3;
+    else if (nodeProf > 70 && q.difficulty === "hard") difficultyScore = 3;
+    else difficultyScore = 1;
+    const weakBonus = nodeProf < 60 ? 1 : 0;
+    return { question: q, score: difficultyScore + weakBonus };
+  });
+
+  const maxScore = Math.max(...scored.map((s) => s.score));
+  const topQuestions = scored
+    .filter((s) => s.score === maxScore)
+    .map((s) => s.question);
+  return topQuestions[Math.floor(Math.random() * topQuestions.length)];
+}
+
 export default function TutoringPage() {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
-  const [proficiency, setProficiency] = useState(45);
   const [feedback, setFeedback] = useState<FeedbackType>(null);
   const [showSolutionWarning, setShowSolutionWarning] = useState(false);
   const [solvedIds, setSolvedIds] = useState<Set<string>>(new Set());
+  const [questionCount, setQuestionCount] = useState(0);
 
-  const question = QUESTIONS[currentQuestionIndex % QUESTIONS.length];
-  const isSolved = solvedIds.has(question.id);
+  const { getProficiency, recordAttempt, hydrated } = useProficiency();
 
-  const adjustProficiency = (delta: number) => {
-    setProficiency((p) => Math.max(0, Math.min(100, p + delta)));
-  };
+  useEffect(() => {
+    if (hydrated && !currentQuestion) {
+      const first = selectNextQuestion(new Set(), getProficiency, QUESTIONS);
+      if (first) setCurrentQuestion(first);
+    }
+  }, [hydrated, currentQuestion, getProficiency]);
+
+  const question = currentQuestion;
+  const isSolved = question ? solvedIds.has(question.id) : false;
+  const nodeProficiency = question ? getProficiency(question.nodeId) : 0;
+  const nodeInfo = question ? getNodeInfo(question.nodeId) : null;
 
   const handleSubmit = () => {
-    if (!answer.trim()) return;
+    if (!question || !answer.trim()) return;
     const isCorrect =
       answer.trim().toLowerCase() === question.answer.toLowerCase();
 
+    recordAttempt(question.nodeId, question.id, isCorrect);
+
     if (isCorrect) {
       setFeedback("correct");
-      adjustProficiency(5);
       setSolvedIds((s) => new Set(s).add(question.id));
     } else {
       setFeedback("error");
-      adjustProficiency(-5);
     }
     setAnswer("");
   };
 
   const handleHintUsed = useCallback(() => {
     setFeedback("hint");
-    adjustProficiency(-5);
   }, []);
 
   const handleShowSolution = () => {
+    if (!question) return;
+    recordAttempt(question.nodeId, question.id, false);
     setFeedback("error");
-    adjustProficiency(-5);
     setShowSolutionWarning(false);
     setAnswer(question.answer);
   };
 
   const handleNext = () => {
-    setCurrentQuestionIndex((i) => i + 1);
-    setAnswer("");
-    setFeedback(null);
-    setShowSolutionWarning(false);
+    if (!question) return;
+    const next = selectNextQuestion(
+      solvedIds,
+      getProficiency,
+      QUESTIONS,
+      question.id,
+    );
+    if (next) {
+      setCurrentQuestion(next);
+      setAnswer("");
+      setFeedback(null);
+      setShowSolutionWarning(false);
+      setQuestionCount((c) => c + 1);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -63,11 +121,19 @@ export default function TutoringPage() {
   };
 
   const progressStatus =
-    proficiency >= 80
-      ? "completed"
-      : proficiency > 0
-        ? "in_progress"
-        : "in_progress";
+    nodeProficiency >= 80 ? "completed" : "in_progress";
+
+  if (!hydrated || !question) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-slate-400">
+        Carregando questões...
+      </div>
+    );
+  }
+
+  const moduleName = nodeInfo?.module.title ?? "";
+  const moduleNumber = nodeInfo?.module.number ?? 0;
+  const nodeLabel = nodeInfo?.node.label ?? "";
 
   return (
     <div className="min-h-screen bg-[#0F172A]">
@@ -84,17 +150,17 @@ export default function TutoringPage() {
               </p>
               <div className="flex items-center gap-3 mb-4">
                 <NodeProgressCircle
-                  proficiency={proficiency}
+                  proficiency={nodeProficiency}
                   status={progressStatus}
                   size={56}
                   strokeWidth={4}
                 />
                 <div>
                   <p className="text-xs text-violet-400 font-medium">
-                    Módulo 2 › Nó 2.2
+                    Módulo {moduleNumber} › Nó {question.nodeId}
                   </p>
                   <p className="text-sm font-semibold text-slate-200 leading-snug mt-0.5">
-                    Conversão Decimal para Binário
+                    {nodeLabel}
                   </p>
                 </div>
               </div>
@@ -104,24 +170,24 @@ export default function TutoringPage() {
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Proficiência</span>
                   <span className="font-mono font-medium text-violet-400">
-                    {proficiency}%
+                    {nodeProficiency}%
                   </span>
                 </div>
                 <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"
-                    style={{ width: `${proficiency}%` }}
+                    style={{ width: `${nodeProficiency}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-slate-600">
-                  {proficiency >= 80
+                  {nodeProficiency >= 80
                     ? "✓ Pronto para o exame!"
-                    : `${80 - proficiency}% até o exame do módulo`}
+                    : `${80 - nodeProficiency}% até o exame do módulo`}
                 </p>
               </div>
 
               {/* Exam ready CTA */}
-              {proficiency >= 80 && (
+              {nodeProficiency >= 80 && (
                 <a
                   href="/exame"
                   className="mt-4 block w-full text-center text-xs font-semibold btn-primary py-2.5"
@@ -138,16 +204,20 @@ export default function TutoringPage() {
               </p>
               <div className="space-y-2 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">+5%</span>
-                  <span>por acerto direto</span>
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span>Acertos aumentam sua proficiência</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-red-400 font-bold">−5%</span>
-                  <span>por erro ou dica usada</span>
+                  <span className="text-red-400 font-bold">✕</span>
+                  <span>Erros reduzem sua proficiência</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-violet-400 font-bold">80%</span>
                   <span>para desbloquear o exame</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-violet-400 font-bold">🧠</span>
+                  <span>Questões adaptadas ao seu nível</span>
                 </div>
               </div>
             </div>
@@ -165,25 +235,40 @@ export default function TutoringPage() {
           <section
             className="lg:col-span-2 space-y-4 animate-slide-up"
             style={{ animationDelay: "0.1s" }}
+            key={question.id}
           >
             {/* <QuestionCard /> */}
             <div className="card p-6">
               {/* Breadcrumb */}
               <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-5">
-                <span>Módulo 2</span>
+                <span>Módulo {moduleNumber}</span>
                 <span>›</span>
-                <span>Sistema Binário</span>
+                <span>{moduleName}</span>
                 <span>›</span>
                 <span className="text-violet-400">
-                  Nó 2.2 — Conversão Decimal → Binário
+                  Nó {question.nodeId} — {nodeLabel}
                 </span>
               </div>
 
-              {/* Question counter */}
+              {/* Question counter & difficulty badge */}
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-xs font-mono text-slate-500 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  Questão {(currentQuestionIndex % QUESTIONS.length) + 1} de{" "}
-                  {QUESTIONS.length}
+                  Questão {questionCount + 1}
+                </span>
+                <span
+                  className={`text-xs font-mono px-2.5 py-1 rounded-lg border ${
+                    question.difficulty === "easy"
+                      ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"
+                      : question.difficulty === "medium"
+                        ? "text-yellow-400 border-yellow-500/20 bg-yellow-500/10"
+                        : "text-red-400 border-red-500/20 bg-red-500/10"
+                  }`}
+                >
+                  {question.difficulty === "easy"
+                    ? "Fácil"
+                    : question.difficulty === "medium"
+                      ? "Médio"
+                      : "Difícil"}
                 </span>
                 {isSolved && (
                   <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
@@ -235,14 +320,14 @@ export default function TutoringPage() {
                       onClick={handleShowSolution}
                       className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-500 text-white transition-colors"
                     >
-                      Confirmar (−5%)
+                      Confirmar
                     </button>
                   )}
                 </div>
 
                 {showSolutionWarning && (
                   <p className="text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2 animate-fade-in">
-                    ⚠ Ver a solução subtrairá 5% da sua proficiência neste nó.
+                    ⚠ Ver a solução contará como erro na sua proficiência.
                   </p>
                 )}
               </div>
@@ -269,7 +354,12 @@ export default function TutoringPage() {
       </main>
 
       {/* <FeedbackToast /> */}
-      <FeedbackToast type={feedback} onClose={() => setFeedback(null)} />
+      <FeedbackToast
+        type={feedback}
+        onClose={() => setFeedback(null)}
+        proficiency={nodeProficiency}
+        nodeId={question.nodeId}
+      />
     </div>
   );
 }

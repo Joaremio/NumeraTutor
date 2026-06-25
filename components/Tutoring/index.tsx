@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import type { DomainModule } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { useProficiency } from "@/hooks/useProficiency";
 
 interface TutoringClientProps {
   initialModule: DomainModule;
@@ -15,9 +17,10 @@ export default function TutoringClient({
   activeNodeId,
 }: TutoringClientProps) {
   const router = useRouter();
+  const [showPracticeWarning, setShowPracticeWarning] = useState(false);
 
-  // Lógica nova através do seu Hook
   const { completeNode, isCompleted } = useNodeProgress();
+  const { getProficiency } = useProficiency();
 
   const nodes = initialModule.nodes;
   const currentIndex = nodes.findIndex((n) => n.id === activeNodeId);
@@ -26,12 +29,21 @@ export default function TutoringClient({
   const currentNode = nodes[activeIndex];
   const nextNode = nodes[activeIndex + 1];
 
+  const prof = getProficiency(currentNode.id);
+  const profOk = prof >= 80;
+
   // Verifica se todos os nós estão completados
   const isChallengeUnlocked = nodes.every((n) => isCompleted(n.id));
 
   const handleCompleteAndNext = () => {
-    // Seta o nó atual como concluído no estado global/hook
-    completeNode(currentNode.id);
+    const ok = completeNode(currentNode.id);
+
+    if (!ok) {
+      setShowPracticeWarning(true);
+      return;
+    }
+
+    setShowPracticeWarning(false);
 
     if (nextNode) {
       router.push(`?node=${nextNode.id}`);
@@ -147,22 +159,51 @@ export default function TutoringClient({
         </div>
 
         {/* Botão Flutuante/Rodapé de Avançar */}
-        <div className="mt-12 pt-6 border-t border-slate-800 flex justify-end">
-          <button
-            onClick={handleCompleteAndNext}
-            className={`
-              px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 active:scale-95
-              ${
-                !nextNode && isCompleted(currentNode.id)
-                  ? "bg-slate-800 text-slate-500 cursor-not-allowed hidden"
-                  : "bg-slate-100 text-slate-900 hover:bg-white shadow-lg hover:shadow-xl hover:shadow-slate-100/10"
-              }
-            `}
-          >
-            {nextNode
-              ? "Marcar como concluído e avançar →"
-              : "Finalizar Módulo ✓"}
-          </button>
+        <div className="mt-12 pt-6 border-t border-slate-800 flex flex-col gap-3">
+          {showPracticeWarning && (
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-orange-500/20 bg-orange-500/5 animate-fade-in">
+              <span className="text-orange-400 text-sm">⚠</span>
+              <div className="flex-1">
+                <p className="text-xs text-orange-300 font-medium">
+                  Proficiência insuficiente ({prof}%)
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Pratique mais para atingir 80% neste tópico.
+                </p>
+              </div>
+              <Link
+                href="/questoes"
+                className="text-xs font-medium text-violet-400 hover:text-violet-300 px-3 py-1.5 rounded-lg border border-violet-500/30 hover:border-violet-400 transition-all"
+              >
+                Praticar →
+              </Link>
+            </div>
+          )}
+          <div className="flex justify-between items-center">
+            {!profOk && !isCompleted(currentNode.id) && (
+              <p className="text-xs text-slate-500">
+                Proficiência: <span className="text-orange-400 font-mono">{prof}%</span> — mínimo 80%
+              </p>
+            )}
+            <button
+              onClick={handleCompleteAndNext}
+              disabled={isCompleted(currentNode.id)}
+              className={`
+                ml-auto px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 active:scale-95
+                ${
+                  isCompleted(currentNode.id)
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                    : "bg-slate-100 text-slate-900 hover:bg-white shadow-lg hover:shadow-xl hover:shadow-slate-100/10"
+                }
+              `}
+            >
+              {isCompleted(currentNode.id)
+                ? "Concluído ✓"
+                : nextNode
+                  ? "Marcar como concluído e avançar →"
+                  : "Finalizar Módulo ✓"}
+            </button>
+          </div>
         </div>
       </section>
     </main>

@@ -1,13 +1,9 @@
 import { MODULE_CONTENT } from "./domain-content";
 
-export type NodeStatus = "locked" | "in_progress" | "completed";
-
 export interface DomainNode {
   id: string;
   label: string;
   content?: string;
-  proficiency: number;
-  status: NodeStatus;
 }
 
 export interface DomainModule {
@@ -20,6 +16,8 @@ export interface DomainModule {
   nodes: DomainNode[];
 }
 
+export type Difficulty = "easy" | "medium" | "hard";
+
 export interface Question {
   id: string;
   moduleId?: string;
@@ -28,11 +26,13 @@ export interface Question {
   answer: string;
   hints: string[];
   explanation: string;
+  difficulty: Difficulty;
 }
 
 export interface ExamQuestion {
   id: string;
   moduleId: string;
+  nodeId: string;
   answer: string;
   options: string[];
 }
@@ -54,22 +54,16 @@ export const MODULES: DomainModule[] = [
         id: "1.1",
         label: "História dos Sistemas de Numeração",
         content: MODULE_CONTENT["1.1"],
-        proficiency: 100,
-        status: "completed",
       },
       {
         id: "1.2",
         label: "Conceito de Base Numérica",
         content: MODULE_CONTENT["1.2"],
-        proficiency: 100,
-        status: "completed",
       },
       {
         id: "1.3",
         label: "Notação Posicional e Pesos Matemáticos",
         content: MODULE_CONTENT["1.3"],
-        proficiency: 85,
-        status: "completed",
       },
     ],
   },
@@ -86,22 +80,16 @@ export const MODULES: DomainModule[] = [
         id: "2.1",
         label: "Bit e Byte",
         content: MODULE_CONTENT["2.1"],
-        proficiency: 80,
-        status: "in_progress",
       },
       {
         id: "2.2",
         label: "Decimal → Binário",
         content: MODULE_CONTENT["2.2"],
-        proficiency: 45,
-        status: "in_progress",
       },
       {
         id: "2.3",
         label: "Binário → Decimal",
         content: MODULE_CONTENT["2.3"],
-        proficiency: 10,
-        status: "in_progress",
       },
     ],
   },
@@ -118,22 +106,16 @@ export const MODULES: DomainModule[] = [
         id: "3.1",
         label: "Mapeamento A–F",
         content: MODULE_CONTENT["3.1"],
-        proficiency: 0,
-        status: "locked",
       },
       {
         id: "3.2",
         label: "Decimal → Hexadecimal",
         content: MODULE_CONTENT["3.2"],
-        proficiency: 0,
-        status: "locked",
       },
       {
         id: "3.3",
         label: "Binário → Hexadecimal",
         content: MODULE_CONTENT["3.3"],
-        proficiency: 0,
-        status: "locked",
       },
     ],
   },
@@ -150,22 +132,16 @@ export const MODULES: DomainModule[] = [
         id: "4.1",
         label: "Eletrônica e Física",
         content: MODULE_CONTENT["4.1"],
-        proficiency: 0,
-        status: "locked",
       },
       {
         id: "4.2",
         label: "Design Gráfico",
         content: MODULE_CONTENT["4.2"],
-        proficiency: 0,
-        status: "locked",
       },
       {
         id: "4.3",
         label: "Redes de Computadores",
         content: MODULE_CONTENT["4.3"],
-        proficiency: 0,
-        status: "locked",
       },
     ],
   },

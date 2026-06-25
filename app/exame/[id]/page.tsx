@@ -6,7 +6,15 @@ import AppHeader from "@/components/layout/AppHeader";
 import { MODULES } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
 import { EXAM_QUESTIONS } from "@/lib/domain-questions";
-// 👈 novo import
+
+function getNodeInfo(nodeId: string) {
+  for (const module of MODULES) {
+    for (const node of module.nodes) {
+      if (node.id === nodeId) return { moduleId: module.id, node };
+    }
+  }
+  return null;
+}
 
 type ExamPhase = "intro" | "question" | "result";
 
@@ -212,6 +220,55 @@ export default function ExamPage({ params }: ExamPageProps) {
                 </div>
               )}
             </div>
+
+            {/* Diagnóstico por tópico */}
+            {(() => {
+              const nodeMap = new Map<string, { correct: number; total: number }>();
+              questions.forEach((q) => {
+                if (!q.nodeId) return;
+                const cur = nodeMap.get(q.nodeId) ?? { correct: 0, total: 0 };
+                cur.total++;
+                if (answers[q.id] === q.answer) cur.correct++;
+                nodeMap.set(q.nodeId, cur);
+              });
+              const weakNodes = Array.from(nodeMap.entries()).filter(
+                ([, v]) => v.correct / v.total < 0.6,
+              );
+              if (weakNodes.length === 0) return null;
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs font-mono text-orange-400 tracking-widest uppercase">
+                    🔍 Tópicos para Revisar
+                  </p>
+                  {weakNodes.map(([nodeId, stats]) => {
+                    const info = getNodeInfo(nodeId);
+                    if (!info) return null;
+                    return (
+                      <div
+                        key={nodeId}
+                        className="flex items-center justify-between gap-3 p-3 rounded-xl border border-orange-500/20 bg-orange-500/5 text-sm"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-slate-300 font-medium">
+                            Nó {nodeId} — {info.node.label}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {stats.correct}/{stats.total} corretas (
+                            {Math.round((stats.correct / stats.total) * 100)}%)
+                          </p>
+                        </div>
+                        <Link
+                          href={`/tutoria/${info.moduleId}?node=${nodeId}`}
+                          className="shrink-0 text-xs font-medium text-violet-400 hover:text-violet-300 px-3 py-1.5 rounded-lg border border-violet-500/30 hover:border-violet-400 transition-all"
+                        >
+                          Revisar
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             <div className="space-y-2">
               <p className="text-xs font-mono text-slate-500 tracking-widest uppercase">

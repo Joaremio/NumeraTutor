@@ -1,6 +1,7 @@
 "use client";
 
 import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { useProficiency } from "@/hooks/useProficiency";
 import type { DomainNode } from "@/lib/domain";
 
 interface NodeCardProps {
@@ -9,6 +10,7 @@ interface NodeCardProps {
 
 export default function NodeCard({ node }: NodeCardProps) {
   const { isUnlocked, isCompleted } = useNodeProgress();
+  const { getProficiency } = useProficiency();
 
   const completed = isCompleted(node.id);
   const unlocked = isUnlocked(node.id);
@@ -19,7 +21,8 @@ export default function NodeCard({ node }: NodeCardProps) {
   const isProgress = status === "in_progress";
   const isDone = status === "completed";
 
-  const isExamReady = node.proficiency >= 80 && isProgress;
+  const prof = getProficiency(node.id);
+  const isExamReady = prof >= 80 && isProgress;
 
   return (
     <div

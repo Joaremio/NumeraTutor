@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MODULES } from "@/lib/domain";
+import { useProficiency } from "./useProficiency";
 
 export function useNodeProgress() {
   const [hydrated, setHydrated] = useState(false);
   const [completedNodes, setCompletedNodes] = useState<string[]>([]);
   const [unlockedNodes, setUnlockedNodes] = useState<string[]>([]);
+
+  const { getProficiency } = useProficiency();
 
   const allNodeIds = useMemo(
     () => MODULES.flatMap((module) => module.nodes.map((node) => node.id)),
@@ -49,6 +52,15 @@ export function useNodeProgress() {
       return currentMeta?.moduleId === nextMeta?.moduleId;
     },
     [getNextNodeId, nodeModuleMap],
+  );
+
+  const nodesInModuleReady = useCallback(
+    (moduleId: string): boolean => {
+      const module = MODULES.find((m) => m.id === moduleId);
+      if (!module) return false;
+      return module.nodes.every((n) => getProficiency(n.id) >= 60);
+    },
+    [getProficiency],
   );
 
   // hydrate do localStorage
@@ -97,7 +109,6 @@ export function useNodeProgress() {
     setHydrated(true);
   }, [allNodeIds, getNextNodeId, save, shouldAutoUnlockNext]);
 
-  // 🔹 CHECKS
   const isCompleted = useCallback(
     (nodeId: string) => completedNodes.includes(nodeId),
     [completedNodes],
@@ -108,37 +119,69 @@ export function useNodeProgress() {
     [unlockedNodes],
   );
 
-  // 🔹 COMPLETE NODE
   const completeNode = useCallback(
-    (nodeId: string) => {
-      setCompletedNodes((prev) => {
-        if (prev.includes(nodeId)) return prev;
+    (nodeId: string): boolean => {
+      if (completedNodes.includes(nodeId)) return false;
 
-        const updated = [...prev, nodeId];
-        save("completedNodes", updated);
+      const prof = getProficiency(nodeId);
+      if (prof < 80) return false;
 
-        const nextNodeId = getNextNodeId(nodeId);
-        if (nextNodeId && shouldAutoUnlockNext(nodeId)) {
-          setUnlockedNodes((prevUnlocked) => {
-            if (prevUnlocked.includes(nextNodeId)) return prevUnlocked;
+      const nextCompleted = [...completedNodes, nodeId];
+      save("completedNodes", nextCompleted);
+      setCompletedNodes(nextCompleted);
 
-            const updatedUnlocked = [...prevUnlocked, nextNodeId];
-            save("unlockedNodes", updatedUnlocked);
-            return updatedUnlocked;
-          });
+      const nextNodeId = getNextNodeId(nodeId);
+      if (
+        nextNodeId &&
+        shouldAutoUnlockNext(nodeId) &&
+        !unlockedNodes.includes(nextNodeId)
+      ) {
+        const nextUnlocked = [...unlockedNodes, nextNodeId];
+        save("unlockedNodes", nextUnlocked);
+        setUnlockedNodes(nextUnlocked);
+      }
+
+      const currentMeta = nodeModuleMap.get(nodeId);
+      if (currentMeta) {
+        const currentModule = MODULES.find(
+          (m) => m.id === currentMeta.moduleId,
+        );
+        if (currentModule) {
+          const allComplete = currentModule.nodes.every((n) =>
+            nextCompleted.includes(n.id),
+          );
+          if (allComplete) {
+            const nextModule = MODULES.find(
+              (m) => m.number === currentModule.number + 1,
+            );
+            if (nextModule) {
+              const firstNodeId = nextModule.nodes[0]?.id;
+              if (firstNodeId && !unlockedNodes.includes(firstNodeId)) {
+                const nextUnlocked = [...unlockedNodes, firstNodeId];
+                save("unlockedNodes", nextUnlocked);
+                setUnlockedNodes(nextUnlocked);
+              }
+            }
+          }
         }
+      }
 
-        return updated;
-      });
+      return true;
     },
-    [getNextNodeId, shouldAutoUnlockNext],
+    [
+      completedNodes,
+      unlockedNodes,
+      getProficiency,
+      getNextNodeId,
+      shouldAutoUnlockNext,
+      save,
+      nodeModuleMap,
+    ],
   );
 
-  // 🔹 UNLOCK NODE
   const unlockNode = useCallback((nodeId: string) => {
     setUnlockedNodes((prev) => {
       if (prev.includes(nodeId)) return prev;
-
       const updated = [...prev, nodeId];
       save("unlockedNodes", updated);
       return updated;
@@ -159,5 +202,6 @@ export function useNodeProgress() {
     completeNode,
     unlockNode,
     unlockFirstNode,
+    nodesInModuleReady,
   };
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { DomainModule } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { useProficiency } from "@/hooks/useProficiency";
 import NodeCard from "./NodeCard";
 
 interface ModuleCardProps {
@@ -11,7 +12,8 @@ interface ModuleCardProps {
 }
 
 export default function ModuleCard({ module, isLast }: ModuleCardProps) {
-  const { isUnlocked, isCompleted } = useNodeProgress();
+  const { isUnlocked, isCompleted, nodesInModuleReady } = useNodeProgress();
+  const { getProficiency } = useProficiency();
 
   const completedNodes = module.nodes.filter((n) => isCompleted(n.id)).length;
 
@@ -22,6 +24,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
   );
 
   const moduleCompleted = completedNodes === totalNodes;
+  const moduleReady = nodesInModuleReady(module.id);
 
   return (
     <div className="relative flex flex-col items-center w-full">
@@ -74,7 +77,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
               Ir para módulo
             </Link>
 
-            {moduleCompleted && (
+            {moduleReady && (
               <Link
                 href={`/exame/${module.id}`}
                 className="text-xs font-medium text-emerald-400 hover:text-emerald-300
