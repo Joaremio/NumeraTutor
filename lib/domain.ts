@@ -47,18 +47,247 @@ export const MODULES: DomainModule[] = [
       {
         id: "1.1",
         label: "História dos Sistemas de Numeração",
+        content: `
+<div class="space-y-6 text-slate-300">
+  <header class="border-b border-slate-800 pb-4">
+    <h1 class="text-2xl font-bold text-slate-100 mb-2">Módulo 1.1: História dos Sistemas de Numeração</h1>
+    <p class="text-slate-400">Conheça as civilizações que moldaram a forma como representamos números hoje.</p>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">1. As Primeiras Contagens</h2>
+    <p>Muito antes de sistemas formais existirem, os humanos contavam utilizando os recursos mais simples disponíveis: os dedos das mãos. Essa prática intuitiva é a razão pela qual o <strong class="text-slate-100 font-semibold">sistema decimal (base 10)</strong> se tornou o padrão universal da humanidade — afinal, temos exatamente 10 dedos.</p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">2. Civilizações e suas Contribuições</h2>
+    <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+      <table class="w-full text-left text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/80 text-slate-400 font-mono text-xs">
+            <th class="p-3">Civilização</th>
+            <th class="p-3">Sistema</th>
+            <th class="p-3">Contribuição Principal</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60">
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Babilônios</td>
+            <td class="p-3 text-indigo-400 font-mono">Base 60</td>
+            <td class="p-3 text-slate-400">Origem dos 60 minutos/segundos e dos 360° do círculo</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Maias</td>
+            <td class="p-3 text-indigo-400 font-mono">Base 20</td>
+            <td class="p-3 text-slate-400">Possivelmente contavam dedos dos pés também</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Romanos</td>
+            <td class="p-3 text-indigo-400 font-mono">Não-posicional</td>
+            <td class="p-3 text-slate-400">Símbolos fixos (I, V, X, L, C, D, M) sem zero</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Indo-arábicos</td>
+            <td class="p-3 text-indigo-400 font-mono">Base 10</td>
+            <td class="p-3 text-slate-400">Criaram o zero e a notação posicional moderna</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">3. Por que isso importa para a Computação?</h2>
+    <p>Cada computador moderno é, no fundo, uma máquina que trabalha com apenas dois estados: ligado e desligado. Essa característica levou ao uso do <strong class="text-slate-100 font-semibold">sistema binário (base 2)</strong> — uma herança direta do estudo histórico das bases numéricas.</p>
+    <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 my-2">
+      <p class="text-sm font-mono"><span class="text-slate-500">// Linha do tempo resumida:</span> Dedos (Base 10) → Babilônios (Base 60) → Romanos (Não-posicional) → Indo-arábicos (Zero + Base 10) → Computadores (<span class="text-amber-400">Base 2</span>)</p>
+    </div>
+  </section>
+</div>
+`,
         proficiency: 100,
         status: "completed",
       },
       {
         id: "1.2",
         label: "Conceito de Base Numérica",
+        content: `
+<div class="space-y-6 text-slate-300">
+  <header class="border-b border-slate-800 pb-4">
+    <h1 class="text-2xl font-bold text-slate-100 mb-2">Módulo 1.2: Conceito de Base Numérica</h1>
+    <p class="text-slate-400">Entenda o que define matematicamente um sistema de numeração e como bases diferentes coexistem.</p>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">1. O que é uma Base?</h2>
+    <p>A <strong class="text-slate-100 font-semibold">base</strong> de um sistema de numeração define <span class="text-indigo-400 font-bold">quantos símbolos distintos</span> estão disponíveis para representar valores. Os dígitos válidos sempre começam no <strong>0</strong> e vão até <strong>(base − 1)</strong>.</p>
+    <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 my-2">
+      <p class="text-sm font-mono"><span class="text-slate-500">// Regra geral:</span> Base <strong class="text-slate-100">N</strong> → dígitos válidos de <span class="text-emerald-400">0</span> até <span class="text-emerald-400">N−1</span></p>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">2. Os Sistemas Mais Usados na Computação</h2>
+    <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+      <table class="w-full text-left text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/80 text-slate-400 font-mono text-xs">
+            <th class="p-3">Nome</th>
+            <th class="p-3">Base</th>
+            <th class="p-3">Dígitos Válidos</th>
+            <th class="p-3">Uso Principal</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60">
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Decimal</td>
+            <td class="p-3 text-indigo-400 font-mono">10</td>
+            <td class="p-3 text-slate-400">0 a 9</td>
+            <td class="p-3 text-slate-400">Uso humano cotidiano</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Binário</td>
+            <td class="p-3 text-indigo-400 font-mono">2</td>
+            <td class="p-3 text-slate-400">0 e 1</td>
+            <td class="p-3 text-slate-400">Processamento em hardware</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Octal</td>
+            <td class="p-3 text-indigo-400 font-mono">8</td>
+            <td class="p-3 text-slate-400">0 a 7</td>
+            <td class="p-3 text-slate-400">Permissões Unix/Linux</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-medium text-slate-200">Hexadecimal</td>
+            <td class="p-3 text-indigo-400 font-mono">16</td>
+            <td class="p-3 text-slate-400">0 a 9 e A a F</td>
+            <td class="p-3 text-slate-400">Endereços de memória, cores RGB</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">3. Como Identificar a Base de um Número?</h2>
+    <p>Na notação matemática formal, a base é indicada como um subscrito ao final do número. Isso evita ambiguidades quando trabalhamos com múltiplos sistemas ao mesmo tempo.</p>
+    <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+      <table class="w-full text-left text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/80 text-slate-400 font-mono text-xs">
+            <th class="p-3">Notação</th>
+            <th class="p-3">Leitura</th>
+            <th class="p-3">Valor em Decimal</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60">
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-mono text-amber-400">1010₂</td>
+            <td class="p-3 text-slate-400">"1010 na base 2" (binário)</td>
+            <td class="p-3 font-medium text-slate-200">10</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-mono text-amber-400">1010₈</td>
+            <td class="p-3 text-slate-400">"1010 na base 8" (octal)</td>
+            <td class="p-3 font-medium text-slate-200">520</td>
+          </tr>
+          <tr class="hover:bg-slate-800/30">
+            <td class="p-3 font-mono text-amber-400">1010₁₆</td>
+            <td class="p-3 text-slate-400">"1010 na base 16" (hex)</td>
+            <td class="p-3 font-medium text-slate-200">4112</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-slate-500 italic mt-2">Nota: O mesmo conjunto de dígitos "1010" representa valores completamente diferentes dependendo da base!</p>
+  </section>
+</div>
+`,
         proficiency: 100,
         status: "completed",
       },
       {
         id: "1.3",
         label: "Notação Posicional e Pesos Matemáticos",
+        // Nó 1.3
+        content: `
+<div class="space-y-6 text-slate-300">
+  <header class="border-b border-slate-800 pb-4">
+    <h1 class="text-2xl font-bold text-slate-100 mb-2">Módulo 1.3: Notação Posicional e Pesos Matemáticos</h1>
+    <p class="text-slate-400">Descubra como a posição de cada dígito determina seu valor real dentro de um número.</p>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">1. O Princípio Posicional</h2>
+    <p>Em qualquer sistema de numeração posicional, o <strong class="text-slate-100 font-semibold">valor de um dígito</strong> não depende apenas de qual símbolo ele é, mas também de <span class="text-indigo-400 font-bold">onde ele está posicionado</span> no número. Cada posição carrega um <strong>peso matemático</strong> que é uma potência da base.</p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold text-indigo-400">2. Como os Pesos Funcionam</h2>
+    <p>Os pesos crescem da direita para a esquerda. A posição mais à direita sempre vale <span class="text-indigo-400 font-bold">base⁰ = 1</span>. Cada posição seguinte multiplica o peso por mais uma vez a base.</p>
+    <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+      <table class="w-full text-center text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 bg-slate-900/80 text-slate-400 font-mono text-xs">
+            <th class="p-3 text-left">Posição</th>
+            <th class="p-3">5ª (esq.)</th>
+            <th class="p-3">4ª</th>
+            <th class="p-3">3ª</th>
+            <th class="p-3">2ª</th>
+            <th class="p-3">1ª (dir.)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 font-mono">
+          <tr>
+            <td class="p-3 text-slate-400 text-xs text-left">Potência</td>
+            <td class="p-3 text-slate-500 text-xs">base⁴</td>
+            <td class="p-3 text-slate-500 text-xs">base³</td>
+            <td class="p-3 text-slate-500 text-xs">base²</td>
+            <td class="p-3 text-slate-500 text-xs">base¹</td>
+            <td class="p-3 text-slate-500 text-xs">base⁰</td>
+          </tr>
+          <tr class="bg-slate-900/20">
+            <td class="p-3 text-slate-400 text-xs text-left">Base 10 (Decimal)</td>
+            <td class="p-3 text-indigo-400 font-bold">10.000</td>
+            <td class="p-3 text-indigo-400 font-bold">1.000</td>
+            <td class="p-3 text-indigo-400 font-bold">100</td>
+            <td class="p-3 text-indigo-400 font-bold">10</td>
+            <td class="p-3 text-indigo-400 font-bold">1</td>
+          </tr>
+          <tr>
+            <td class="p-3 text-slate-400 text-xs text-left">Base 2 (Binário)</td>
+            <td class="p-3 text-violet-400 font-bold">16</td>
+            <td class="p-3 text-violet-400 font-bold">8</td>
+            <td class="p-3 text-violet-400 font-bold">4</td>
+            <td class="p-3 text-violet-400 font-bold">2</td>
+            <td class="p-3 text-violet-400 font-bold">1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-4">
+    <h2 class="text-lg font-semibold text-indigo-400">3. Calculando o Valor Total</h2>
+    <p>Para obter o valor real de um número, multiplicamos cada dígito pelo seu peso e somamos tudo. Veja o exemplo com o número decimal <span class="text-slate-100 font-semibold">352</span>:</p>
+    <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 font-mono text-sm space-y-2">
+      <p class="text-slate-500">// Decomposição do número 352 na base 10:</p>
+      <p class="text-slate-300">3 × <span class="text-indigo-400">100</span> = <span class="text-emerald-400">300</span></p>
+      <p class="text-slate-300">5 × <span class="text-indigo-400">10</span>  = <span class="text-emerald-400">50</span></p>
+      <p class="text-slate-300">2 × <span class="text-indigo-400">1</span>   = <span class="text-emerald-400">2</span></p>
+      <p class="border-t border-slate-800 pt-2 text-slate-100 font-bold">Total = <span class="text-amber-400">352</span> ✓</p>
+    </div>
+    <p class="text-sm text-slate-400">Esse mesmo princípio se aplica a <strong class="text-slate-300">qualquer base</strong> — binário, hexadecimal, ou qualquer outro sistema. É a fundação de todas as conversões que você aprenderá nos módulos seguintes.</p>
+  </section>
+
+  <section class="space-y-3">
+    <div class="bg-slate-900/60 border border-indigo-500/30 rounded-xl p-4">
+      <p class="font-semibold text-indigo-400 mb-2">💡 Regra Universal:</p>
+      <p class="text-sm">Valor total = <strong class="text-slate-100">Σ (dígito × baseⁿ)</strong>, onde <em>n</em> começa em 0 na posição mais à direita e aumenta 1 a cada passo para a esquerda.</p>
+    </div>
+  </section>
+</div>
+`,
         proficiency: 85,
         status: "completed",
       },

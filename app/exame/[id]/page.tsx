@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
 import { EXAM_QUESTIONS, MODULES } from "@/lib/domain";
+import { useNodeProgress } from "@/hooks/useNodeProgress";
+// 👈 novo import
 
 type ExamPhase = "intro" | "question" | "result";
 
@@ -12,23 +14,19 @@ interface ExamPageProps {
 }
 
 export default function ExamPage({ params }: ExamPageProps) {
-  // Resolve a Promise dos parâmetros da URL de forma segura em Client Components
   const { id } = params;
 
-  // Busca os metadados do módulo atual
   const currentModule = MODULES.find((m) => m.id === id);
-
-  // Filtra apenas as questões que pertencem a este módulo específico
   const questions = EXAM_QUESTIONS.filter((q) => q.moduleId === id);
 
-  // Estados da aplicação
   const [phase, setPhase] = useState<ExamPhase>("intro");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
 
-  // Fallback caso o módulo ou as questões não sejam encontrados
+  const { unlockFirstNode } = useNodeProgress();
+
   if (!currentModule || questions.length === 0) {
     return (
       <div className="min-h-screen bg-[#0F172A]">
@@ -46,20 +44,27 @@ export default function ExamPage({ params }: ExamPageProps) {
     );
   }
 
-  // Variáveis de controle baseadas no array filtrado
   const total = questions.length;
   const current = questions[currentIndex];
   const isLast = currentIndex === total - 1;
 
-  // Cálculos de pontuação baseados apenas nas questões deste módulo
   const correctCount = Object.entries(answers).filter(
     ([qId, ans]) => questions.find((q) => q.id === qId)?.answer === ans,
   ).length;
   const scorePercent = Math.round((correctCount / total) * 100);
   const passed = scorePercent >= 70;
+  const unlockedNext = scorePercent >= 80; // 👈 critério de desbloqueio
 
-  // Determina dinamicamente o próximo módulo para o botão de avanço
   const nextModule = MODULES.find((m) => m.number === currentModule.number + 1);
+
+  // Desbloqueia o primeiro nó do próximo módulo ao atingir ≥ 80%
+  // Roda apenas uma vez quando a fase de resultado é exibida
+  useEffect(() => {
+    if (phase === "result" && unlockedNext && nextModule) {
+      const firstNodeId = nextModule.nodes[0]?.id;
+      if (firstNodeId) unlockFirstNode(firstNodeId);
+    }
+  }, [phase, unlockedNext, nextModule, unlockFirstNode]);
 
   const handleConfirmAnswer = () => {
     if (!selected) return;
@@ -128,6 +133,18 @@ export default function ExamPage({ params }: ExamPageProps) {
               ))}
             </div>
 
+            {/* Aviso sobre o bônus de desbloqueio */}
+            {nextModule && (
+              <p className="text-xs text-slate-500">
+                💡 Acerte 80% ou mais para desbloquear automaticamente o
+                primeiro nó do{" "}
+                <span className="text-violet-400">
+                  Módulo {nextModule.number}
+                </span>
+                .
+              </p>
+            )}
+
             <p className="text-xs text-slate-500">
               Este exame cobre de forma misturada os tópicos do Módulo{" "}
               {currentModule.number}. Recursos de ajuda não estarão disponíveis.
@@ -145,7 +162,7 @@ export default function ExamPage({ params }: ExamPageProps) {
     );
   }
 
-  // ── FASE: RESULTADO ─────────────────────────────────────────────────────
+  // ── FASE: RESULTADO ───────────────────────────────────────────────────────
   if (phase === "result") {
     return (
       <div className="min-h-screen bg-[#0F172A]">
@@ -180,6 +197,19 @@ export default function ExamPage({ params }: ExamPageProps) {
                     : `Você acertou ${correctCount} de ${total}. É necessário obter 70% de acertos para avançar.`}
                 </p>
               </div>
+
+              {/* Banner de desbloqueio */}
+              {unlockedNext && nextModule && (
+                <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-sm text-violet-300">
+                  <span>🔓</span>
+                  <span>
+                    <strong className="text-violet-200">
+                      {nextModule.nodes[0]?.label}
+                    </strong>{" "}
+                    foi desbloqueado!
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -224,7 +254,7 @@ export default function ExamPage({ params }: ExamPageProps) {
             <div className="flex gap-3">
               {passed ? (
                 <Link
-                  href={nextModule ? `/exame/${nextModule.id}` : "/dashboard"}
+                  href={nextModule ? `/tutoria/${nextModule.id}` : "/dashboard"}
                   className="flex-1 btn-success text-center py-3 text-sm font-semibold"
                 >
                   {nextModule
@@ -254,10 +284,7 @@ export default function ExamPage({ params }: ExamPageProps) {
     );
   }
 
-  // ── FASE: QUESTÕES (FLUXO DO EXAME) ───────────────────────────────────────────────────
-  const currentAnswer = answers[current.id];
-  const isAnswered = !!currentAnswer;
-
+  // ── FASE: QUESTÕES ────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0F172A]">
       <header className="sticky top-0 z-50 border-b border-slate-700/60 bg-[#0F172A]/95 backdrop-blur-md">
