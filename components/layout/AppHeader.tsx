@@ -8,9 +8,8 @@ export default function AppHeader() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/dashboard", label: "Mapa", icon: "⬡" },
-    { href: "/tutoria", label: "Praticar", icon: "✦" },
-    { href: "/exame", label: "Exame", icon: "◈" },
+    { href: "/dashboard", label: "Home" },
+    { href: "/questoes", label: "Praticar" },
   ];
 
   return (
@@ -49,7 +48,6 @@ export default function AppHeader() {
                       : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                   }`}
                 >
-                  <span className="text-xs">{item.icon}</span>
                   {item.label}
                 </Link>
               );
@@ -59,11 +57,13 @@ export default function AppHeader() {
           {/* User info */}
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-medium text-slate-300">Joaremio</span>
+              <span className="text-xs font-medium text-slate-300">
+                Aluno 1
+              </span>
               <span className="text-[10px] text-slate-500">Módulo 2 de 4</span>
             </div>
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white text-xs font-bold shadow-md">
-              J
+              A
             </div>
           </div>
         </div>

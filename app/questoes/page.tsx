@@ -5,7 +5,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import HintPanel from "@/components/ui/HintPanel";
 import FeedbackToast, { FeedbackType } from "@/components/ui/FeedbackToast";
 import NodeProgressCircle from "@/components/ui/NodeProgressCircle";
-import { QUESTIONS } from "@/lib/domain";
+import { QUESTIONS } from "@/lib/domain-questions";
 
 // <TutoringPage /> — Interactive problem-solving environment
 export default function TutoringPage() {

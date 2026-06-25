@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
-import { EXAM_QUESTIONS, MODULES } from "@/lib/domain";
+import { MODULES } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { EXAM_QUESTIONS } from "@/lib/domain-questions";
 // 👈 novo import
 
 type ExamPhase = "intro" | "question" | "result";

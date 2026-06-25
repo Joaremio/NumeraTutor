@@ -110,7 +110,7 @@ export default function TutoringClient({
             {isChallengeUnlocked && (
               <li className="pt-2 mt-2 border-t border-slate-800 animate-in fade-in slide-in-from-top-2 duration-300">
                 <Link
-                  href={`/questoes`}
+                  href={`/exame/${initialModule.id}`}
                   className="
                     flex w-full items-center justify-center
                     rounded-xl px-4 py-3
@@ -120,7 +120,7 @@ export default function TutoringClient({
                     transition-all duration-200 shadow-lg shadow-violet-500/20 active:scale-95
                   "
                 >
-                  Ir para desafio
+                  Realizar Teste
                 </Link>
               </li>
             )}
