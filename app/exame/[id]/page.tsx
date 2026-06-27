@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
 import { MODULES } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { useProficiency } from "@/hooks/useProficiency";
 import { EXAM_QUESTIONS } from "@/lib/domain-questions";
 
 function getNodeInfo(nodeId: string) {
@@ -33,8 +34,37 @@ export default function ExamPage({ params }: ExamPageProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
+  const [accessGranted, setAccessGranted] = useState<boolean | null>(null);
 
-  const { unlockFirstNode } = useNodeProgress();
+  const { nodesInModuleReady, unlockFirstNode } = useNodeProgress();
+  const { hydrated: profHydrated } = useProficiency();
+
+  useEffect(() => {
+    if (profHydrated && currentModule) {
+      setAccessGranted(nodesInModuleReady(currentModule.id));
+    }
+  }, [profHydrated, currentModule, nodesInModuleReady]);
+
+  const total = questions.length;
+  const current = questions[currentIndex];
+  const isLast = currentIndex === total - 1;
+
+  const correctCount = Object.entries(answers).filter(
+    ([qId, ans]) => questions.find((q) => q.id === qId)?.answer === ans,
+  ).length;
+  const scorePercent = Math.round((correctCount / total) * 100);
+  const passed = scorePercent >= 70;
+  const unlockedNext = scorePercent >= 80;
+  const nextModule = currentModule
+    ? MODULES.find((m) => m.number === currentModule.number + 1)
+    : undefined;
+
+  useEffect(() => {
+    if (phase === "result" && unlockedNext && nextModule) {
+      const firstNodeId = nextModule.nodes[0]?.id;
+      if (firstNodeId) unlockFirstNode(firstNodeId);
+    }
+  }, [phase, unlockedNext, nextModule, unlockFirstNode]);
 
   if (!currentModule || questions.length === 0) {
     return (
@@ -53,27 +83,36 @@ export default function ExamPage({ params }: ExamPageProps) {
     );
   }
 
-  const total = questions.length;
-  const current = questions[currentIndex];
-  const isLast = currentIndex === total - 1;
+  if (accessGranted === null) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-slate-400">
+        Verificando acesso ao exame...
+      </div>
+    );
+  }
 
-  const correctCount = Object.entries(answers).filter(
-    ([qId, ans]) => questions.find((q) => q.id === qId)?.answer === ans,
-  ).length;
-  const scorePercent = Math.round((correctCount / total) * 100);
-  const passed = scorePercent >= 70;
-  const unlockedNext = scorePercent >= 80; // 👈 critério de desbloqueio
-
-  const nextModule = MODULES.find((m) => m.number === currentModule.number + 1);
-
-  // Desbloqueia o primeiro nó do próximo módulo ao atingir ≥ 80%
-  // Roda apenas uma vez quando a fase de resultado é exibida
-  useEffect(() => {
-    if (phase === "result" && unlockedNext && nextModule) {
-      const firstNodeId = nextModule.nodes[0]?.id;
-      if (firstNodeId) unlockFirstNode(firstNodeId);
-    }
-  }, [phase, unlockedNext, nextModule, unlockFirstNode]);
+  if (accessGranted === false) {
+    return (
+      <div className="min-h-screen bg-[#0F172A]">
+        <AppHeader />
+        <main className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-400">
+          <div className="card p-8 space-y-4">
+            <p className="text-lg">Módulo não disponível para exame</p>
+            <p className="text-xs text-slate-500">
+              Você precisa de pelo menos 60% de proficiência em todos os nós do
+              módulo para realizar o exame.
+            </p>
+            <Link
+              href={`/tutoria/${currentModule.id}`}
+              className="mt-4 inline-block text-sm font-medium text-violet-400 hover:text-violet-300"
+            >
+              Ir para o conteúdo do módulo →
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const handleConfirmAnswer = () => {
     if (!selected) return;

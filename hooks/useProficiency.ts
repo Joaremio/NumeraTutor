@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MODULES } from "@/lib/domain";
+import { MODULES, DIFFICULTY_VALUE } from "@/lib/domain";
+import type { Difficulty } from "@/lib/domain";
 
 interface AttemptRecord {
   questionId: string;
   correct: boolean;
   timestamp: number;
+  responseTimeMs?: number;
 }
 
 interface NodeProficiencyData {
@@ -16,6 +18,7 @@ interface NodeProficiencyData {
   incorrectAttempts: number;
   history: AttemptRecord[];
   lastPracticed: number;
+  theta: number;            // IRT ability estimate
 }
 
 const STORAGE_KEY = "proficiencyData";
@@ -23,19 +26,25 @@ const STORAGE_KEY = "proficiencyData";
 function calculateScore(data: NodeProficiencyData): number {
   if (data.totalAttempts === 0) return 0;
 
-  const overallRate = data.correctAttempts / data.totalAttempts;
+  // Bayesian estimate com prior Beta(1,1):
+  // posterior_mean = (acertos + 1) / (tentativas + 2)
+  const score =
+    ((data.correctAttempts + 1) / (data.totalAttempts + 2)) * 100;
 
-  const recent = data.history.slice(-5);
-  const recentCorrect = recent.filter((a) => a.correct).length;
-  const recentTotal = recent.length;
-  const recentRate = recentTotal > 0 ? recentCorrect / recentTotal : 0;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
-  const weighted =
-    recentTotal > 0
-      ? recentRate * 0.6 + overallRate * 0.4
-      : overallRate;
-
-  return Math.max(0, Math.min(100, Math.round(weighted * 100)));
+function updateTheta(
+  theta: number,
+  correct: boolean,
+  difficulty: Difficulty,
+): number {
+  // 1PL (Rasch) IRT: P(correct) = 1 / (1 + e^-(theta - d))
+  const d = DIFFICULTY_VALUE[difficulty];
+  const expected = 1 / (1 + Math.exp(-(theta - d)));
+  const actual = correct ? 1 : 0;
+  const learningRate = 0.3;
+  return theta + learningRate * (actual - expected);
 }
 
 function createDefaultData(): NodeProficiencyData {
@@ -46,6 +55,7 @@ function createDefaultData(): NodeProficiencyData {
     incorrectAttempts: 0,
     history: [],
     lastPracticed: 0,
+    theta: 0,
   };
 }
 
@@ -87,8 +97,21 @@ export function useProficiency() {
     [data],
   );
 
+  const getTheta = useCallback(
+    (nodeId: string): number => {
+      return data[nodeId]?.theta ?? 0;
+    },
+    [data],
+  );
+
   const recordAttempt = useCallback(
-    (nodeId: string, questionId: string, correct: boolean) => {
+    (
+      nodeId: string,
+      questionId: string,
+      correct: boolean,
+      responseTimeMs?: number,
+      difficulty?: Difficulty,
+    ) => {
       setData((prev) => {
         const nodeData = prev[nodeId] ?? createDefaultData();
         const updated: NodeProficiencyData = {
@@ -98,9 +121,12 @@ export function useProficiency() {
           incorrectAttempts: nodeData.incorrectAttempts + (correct ? 0 : 1),
           history: [
             ...nodeData.history,
-            { questionId, correct, timestamp: Date.now() },
+            { questionId, correct, timestamp: Date.now(), responseTimeMs },
           ],
           lastPracticed: Date.now(),
+          theta: difficulty
+            ? updateTheta(nodeData.theta, correct, difficulty)
+            : nodeData.theta,
         };
         updated.score = calculateScore(updated);
         const newData = { ...prev, [nodeId]: updated };
@@ -139,6 +165,7 @@ export function useProficiency() {
     hydrated,
     getProficiency,
     getNodeData,
+    getTheta,
     recordAttempt,
     getWeakNodes,
     resetNode,

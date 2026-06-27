@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DomainModule } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
 import { useProficiency } from "@/hooks/useProficiency";
@@ -19,8 +19,13 @@ export default function TutoringClient({
   const router = useRouter();
   const [showPracticeWarning, setShowPracticeWarning] = useState(false);
 
-  const { completeNode, isCompleted } = useNodeProgress();
-  const { getProficiency } = useProficiency();
+  const {
+    completeNode,
+    isCompleted,
+    isUnlocked,
+    hydrated: progressHydrated,
+  } = useNodeProgress();
+  const { getProficiency, hydrated: profHydrated } = useProficiency();
 
   const nodes = initialModule.nodes;
   const currentIndex = nodes.findIndex((n) => n.id === activeNodeId);
@@ -34,6 +39,20 @@ export default function TutoringClient({
 
   // Verifica se todos os nós estão completados
   const isChallengeUnlocked = nodes.every((n) => isCompleted(n.id));
+
+  // Guard: redireciona se o nó atual não está desbloqueado
+  const hydrated = progressHydrated && profHydrated;
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isUnlocked(currentNode.id)) {
+      const firstUnlocked = nodes.find((n) => isUnlocked(n.id));
+      if (firstUnlocked) {
+        router.replace(`?node=${firstUnlocked.id}`);
+      } else {
+        router.replace("/dashboard");
+      }
+    }
+  }, [hydrated, currentNode.id, isUnlocked, nodes, router]);
 
   const handleCompleteAndNext = () => {
     const ok = completeNode(currentNode.id);

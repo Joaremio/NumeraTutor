@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { MODULES } from "@/lib/domain";
+import type { ErrorType } from "@/lib/domain";
 
 // <FeedbackToast /> — Immediate feedback notification (Behaviorism)
 export type FeedbackType = "correct" | "error" | "hint" | null;
@@ -21,7 +22,15 @@ interface FeedbackToastProps {
   onClose: () => void;
   proficiency?: number;
   nodeId?: string;
+  errorType?: ErrorType;
 }
+
+const ERROR_MESSAGES: Record<NonNullable<ErrorType>, string> = {
+  conceitual: "Parece que você ainda não domina este conceito. Revise o conteúdo e tente novamente.",
+  distracao: "Você errou por pouco! Revise os detalhes do cálculo com atenção.",
+  recorrente: "Este erro já ocorreu antes. Reveja o conteúdo e pratique mais.",
+  chute: "Parece que você respondeu sem ler com atenção. Leia cada opção cuidadosamente.",
+};
 
 const FEEDBACK_CONFIG = {
   correct: {
@@ -56,7 +65,7 @@ const FEEDBACK_CONFIG = {
   },
 };
 
-export default function FeedbackToast({ type, onClose, proficiency = 0, nodeId }: FeedbackToastProps) {
+export default function FeedbackToast({ type, onClose, proficiency = 0, nodeId, errorType }: FeedbackToastProps) {
   useEffect(() => {
     if (!type) return;
     const timer = setTimeout(onClose, 3500);
@@ -79,6 +88,11 @@ export default function FeedbackToast({ type, onClose, proficiency = 0, nodeId }
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold ${cfg.text}`}>{cfg.title}</p>
         <p className="text-xs text-slate-400 mt-0.5">{cfg.subtitle(proficiency)}</p>
+        {type === "error" && errorType && (
+          <p className="text-xs text-slate-400 mt-1.5 italic">
+            {ERROR_MESSAGES[errorType]}
+          </p>
+        )}
         {type === "error" && nodeId && (() => {
           const info = getNodeInfo(nodeId);
           if (!info) return null;

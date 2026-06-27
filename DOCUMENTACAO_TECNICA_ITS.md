@@ -4,6 +4,11 @@
 
 NumeraTutor é um Sistema Tutor Inteligente (ITS) para ensino de sistemas de numeração (decimal, binário, hexadecimal). Arquitetura **100% client-side** (Next.js 14 App Router, React 18, Tailwind CSS, TypeScript). Toda persistência é feita via `localStorage`.
 
+O sistema possui dois modelos principais:
+
+- **Modelo do Estudante**: proficiência bayesiana, IRT simplificado (1PL/Rasch), SM-2 (Spaced Repetition), tempo de resposta.
+- **Modelo Tutor**: plano de estudo personalizado, sequenciamento adaptativo, classificação de erros, detecção de confusão.
+
 ---
 
 ## Mapa de Arquivos
@@ -19,22 +24,24 @@ tsconfig.json                   postcss.config.js
 ### `lib/` — Domínio e Dados
 | Arquivo | Função |
 |---|---|
-| `domain.ts` | Tipos (`DomainNode`, `Module`, `Question`, `ExamQuestion`, `Difficulty`) + dados estáticos dos 4 módulos |
+| `domain.ts` | Tipos (`DomainNode`, `DomainModule`, `Question`, `ExamQuestion`, `Difficulty`, `ReviewData`, `StudyPlanItem`, `ErrorType`, `ConfusionStatus`) + dados estáticos dos 4 módulos |
 | `domain-content.ts` | Conteúdo HTML de cada nó (renderizado via `dangerouslySetInnerHTML`) |
-| `domain-questions.ts` | 16 questões práticas (`QUESTIONS`) + 20 questões de exame (`EXAM_QUESTIONS`) |
+| `domain-questions.ts` | 37 questões práticas (`QUESTIONS`) + 40 questões de exame (`EXAM_QUESTIONS`) |
 
 ### `hooks/` — Lógica Central
 | Arquivo | Função |
 |---|---|
-| `useProficiency.ts` | Motor de proficiência dinâmico (cálculo score, persistência localStorage) |
+| `useProficiency.ts` | Motor de proficiência bayesiano + IRT theta + tempo de resposta |
 | `useNodeProgress.ts` | Progressão (completar nós, desbloqueio, maestria) |
+| `useSpacedRepetition.ts` | Algoritmo SM-2 (SuperMemo) para revisão espaçada |
+| `useStudyPlan.ts` | Plano de estudo, classificação de erro, detecção de confusão |
 
 ### `app/` — Páginas (Next.js App Router)
 | Rota | Arquivo | Função |
 |---|---|---|
 | `/` | `page.tsx` | Redireciona para `/dashboard` |
-| `/dashboard` | `dashboard/page.tsx` | Mapa de conhecimento + "Nós para Revisar" |
-| `/questoes` | `questoes/page.tsx` | Prática adaptativa com questões |
+| `/dashboard` | `dashboard/page.tsx` | Mapa de conhecimento + Plano de Estudo + Revisões Pendentes + Nós para Revisar |
+| `/questoes` | `questoes/page.tsx` | Prática adaptativa com tempo de resposta, SM-2 e classificação de erros |
 | `/exame/[id]` | `exame/[id]/page.tsx` | Exame do módulo com diagnóstico |
 | `/tutoria/[id]` | `tutoria/[id]/page.tsx` | Leitura de conteúdo |
 
@@ -47,27 +54,30 @@ tsconfig.json                   postcss.config.js
 | `ui/ModuleCard.tsx` | Card de módulo (ações: ir, testar) |
 | `ui/NodeProgressCircle.tsx` | Círculo SVG de progresso |
 | `ui/HintPanel.tsx` | Dicas progressivas |
-| `ui/FeedbackToast.tsx` | Toast adaptativo com link de revisão |
+| `ui/FeedbackToast.tsx` | Toast adaptativo com tipo de erro + link de revisão |
 
 ---
 
 ## 1. Motor de Proficiência Dinâmico
 
 ### Objetivo
-Calcular e persistir a proficiência do aluno em cada nó de conhecimento com base nas respostas às questões.
+Calcular e persistir a proficiência do aluno em cada nó de conhecimento com base nas respostas às questões, utilizando estimativa bayesiana + IRT.
 
 ### Arquivos
 - `hooks/useProficiency.ts` — implementação
-- `lib/domain.ts` — tipos (`Question.nodeId`, `Difficulty`)
+- `lib/domain.ts` — tipos (`Question.nodeId`, `Difficulty`, `DIFFICULTY_VALUE`)
 
 ### Fluxo de Execução
 ```
-[Aluno responde questão] 
-  → handleSubmit() em /questoes
-  → recordAttempt(nodeId, questionId, correct)
-  → Atualiza NodeProficiencyData em memória
-  → Recalcula score via weighted moving average
-  → Persiste em localStorage("proficiencyData")
+[Aluno responde questão]
+  → questionStartTime = performance.now()
+
+[Aluno confirma resposta]
+  → responseTimeMs = performance.now() - questionStartTime
+  → recordAttempt(nodeId, questionId, correct, responseTimeMs, difficulty)
+      → Atualiza score bayesiano (existente)
+      → Atualiza theta IRT (novo)
+      → Persiste em localStorage("proficiencyData")
   → Re-renderiza UI com novo score
 ```
 
@@ -82,10 +92,10 @@ Calcular e persistir a proficiência do aluno em cada nó de conhecimento com ba
       "correctAttempts": 3,
       "incorrectAttempts": 5,
       "history": [
-        { "questionId": "q2.2-1", "correct": true, "timestamp": 1719000000000 },
-        { "questionId": "q2.2-2", "correct": false, "timestamp": 1719000010000 }
+        { "questionId": "q2.2-1", "correct": true, "timestamp": 1719000000000, "responseTimeMs": 12400 }
       ],
-      "lastPracticed": 1719000010000
+      "lastPracticed": 1719000010000,
+      "theta": -0.42
     }
   }
 }
@@ -93,61 +103,129 @@ Calcular e persistir a proficiência do aluno em cada nó de conhecimento com ba
 
 ### Algoritmo de Cálculo (`calculateScore`)
 
+#### Score Bayeiano (preservado)
 ```
 SE totalAttempts == 0 → score = 0
 
-overallRate = correctAttempts / totalAttempts
-recentAttempts = últimos 5 registros do history
-recentRate = acertos_recentes / total_recentes
-
-SE recentTotal > 0
-  weightedScore = recentRate * 0.6 + overallRate * 0.4
-SENÃO
-  weightedScore = overallRate
-
-score = clamp(round(weightedScore * 100), 0, 100)
+posterior_mean = (correctAttempts + 1) / (totalAttempts + 2)
+score = clamp(round(posterior_mean * 100), 0, 100)
 ```
+
+#### Theta IRT (1PL / Rasch) — novo
+```
+dificuldade: easy = -1, medium = 0, hard = +1
+esperado = 1 / (1 + e^-(theta - dificuldade))
+theta += 0.3 * (real - esperado)
+```
+
+O theta é uma métrica complementar ao score bayesiano. Representa a habilidade estimada do aluno no nó, considerando a dificuldade das questões. Valores positivos indicam desempenho acima da média esperada; negativos indicam dificuldade.
 
 ### API do Hook
 
 ```typescript
 const {
-  hydrated: boolean,           // true quando localStorage foi lido
-  getProficiency(nodeId): number,  // retorna score 0-100
-  getNodeData(nodeId): NodeProficiencyData,  // dados completos
-  recordAttempt(nodeId, questionId, correct): void,  // registra tentativa
-  getWeakNodes(threshold?): Array<{nodeId, score}>,  // nós abaixo do threshold
-  resetNode(nodeId): void,     // zera dados do nó
+  hydrated: boolean,
+  getProficiency(nodeId): number,       // score bayesiano 0-100
+  getNodeData(nodeId): NodeProficiencyData,
+  getTheta(nodeId): number,             // IRT ability estimate
+  recordAttempt(nodeId, questionId, correct, responseTimeMs?, difficulty?): void,
+  getWeakNodes(threshold?): Array<{nodeId, score}>,
+  resetNode(nodeId): void,
 } = useProficiency();
 ```
 
 ### Como Testar
 1. Abra `/questoes` e responda algumas questões
 2. Verifique DevTools → Application → Local Storage → `proficiencyData`
-3. Recarregue a página — proficiência persiste
-4. Acerte 3 seguidas → score sobe; erre 3 seguidas → score desce
+3. Confira que `theta` e `responseTimeMs` estão sendo registrados
+4. Recarregue a página — proficiência persiste
+5. Acerte 3 seguidas → score = 80% (maestria); theta > 0
 
 ### Limitações
-- Algoritmo simples (média ponderada). Não usa IRT, BKT ou Elo.
 - Histórico ilimitado (pode crescer com uso prolongado).
-- Sem data decay — tentativas antigas têm o mesmo peso que recentes (exceto pelo recorte de 5 recentes).
+- Theta não é usado para desbloqueio (apenas score bayesiano).
+- IRT 1PL não modela discriminação (parâmetro a) nem adivinhação (parâmetro c).
 
 ---
 
-## 2. Seleção Adaptativa de Questões
+## 2. SM-2 (Spaced Repetition)
+
+### Objetivo
+Agendar revisões espaçadas dos conteúdos utilizando o algoritmo SM-2 (SuperMemo), combatendo a curva de esquecimento de Ebbinghaus.
+
+### Arquivo
+- `hooks/useSpacedRepetition.ts` — implementação
+- `lib/domain.ts` — tipo `ReviewData`
+
+### Estrutura de Dados (localStorage)
+
+Chave: `"reviewSchedule"`
+
+```json
+{
+  "2.2": {
+    "interval": 6,
+    "ease": 2.5,
+    "repetitions": 1,
+    "nextReview": 1719604800000,
+    "lastReview": 1719000000000
+  }
+}
+```
+
+### Algoritmo SM-2
+```
+quality = computeQuality(correct, responseTimeMs, hintUsed)
+  → 5: correto + rápido (<10s)
+  → 4: correto + médio (10-30s)
+  → 3: correto + lento (>30s)
+  → 1: incorreto
+  → 0: incorreto + usou dica
+
+SE quality < 3:
+  interval = 1 dia, repetitions = 0
+SENÃO:
+  SE repetitions == 0: interval = 1
+  SE repetitions == 1: interval = 6
+  SE repetitions >= 2: interval *= ease
+  repetitions++
+
+ease = max(1.3, ease + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+nextReview = Date.now() + interval * 86400000
+```
+
+### API do Hook
+
+```typescript
+const {
+  hydrated: boolean,
+  recordReview(nodeId, quality): void,
+  getDueReviews(daysAhead?): Array<{nodeId, data}>,
+  getNodeReviewData(nodeId): ReviewData,
+} = useSpacedRepetition();
+```
+
+### Como Testar
+1. Responda questões em `/questoes` — verificar `localStorage("reviewSchedule")`
+2. Verifique que nós com respostas corretas têm `interval` crescendo
+3. Nós com respostas incorretas têm `interval` resetado para 1
+4. No dashboard, verificar seção "Revisões Pendentes" com nós atrasados
+
+---
+
+## 3. Seleção Adaptativa de Questões
 
 ### Objetivo
 Selecionar a próxima questão com base na proficiência atual do aluno, priorizando dificuldade adequada e revisão de nós fracos.
 
 ### Arquivos
 - `app/questoes/page.tsx` — função `selectNextQuestion()`
-- `lib/domain-questions.ts` — 16 questões com `difficulty: "easy" | "medium" | "hard"`
-- `lib/domain.ts` — tipo `Difficulty`
+- `lib/domain-questions.ts` — 37 questões com `difficulty: "easy" | "medium" | "hard"`
 
 ### Fluxo de Execução
 ```
 [Aluno clica "Próxima questão"]
-  → handleNext()
+  → advanceToNext()
   → selectNextQuestion(solvedIds, getProficiency, QUESTIONS, excludeId)
   → Para cada questão não resolvida:
        nodeProf = getProficiency(q.nodeId)
@@ -158,114 +236,174 @@ Selecionar a próxima questão com base na proficiência atual do aluno, prioriz
        weakBonus: prof < 60 → +1
        score = difficultyScore + weakBonus
   → Seleciona aleatoriamente entre as de maior score
-  → Atualiza currentQuestion → re-renderiza
+  → Atualiza currentQuestion + questionStartTimeRef
+  → Re-renderiza
 ```
 
-### Distribuição das 16 Questões
+### Distribuição das 37 Questões
 
-| Nó | Easy | Medium | Hard |
-|---|---|---|---|
-| 1.1 — História dos Sistemas | 1 | 1 | 1 |
-| 1.2 — Conceito de Base | 1 | 1 | 1 |
-| 1.3 — Notação Posicional | 1 | 1 | 1 |
-| 2.1 — Bit e Byte | 1 | 1 | 1 |
-| 2.2 — Decimal → Binário | 1 | 2 | 1 |
-| 2.3 — Binário → Decimal | 1 | 1 | 1 |
+| Nó | Easy | Medium | Hard | Total |
+|---|---|---|---|---|
+| 1.1 — História dos Sistemas | 1 | 1 | 1 | 3 |
+| 1.2 — Conceito de Base | 1 | 1 | 1 | 3 |
+| 1.3 — Notação Posicional | 1 | 1 | 1 | 3 |
+| 2.1 — Bit e Byte | 1 | 1 | 1 | 3 |
+| 2.2 — Decimal → Binário | 1 | 2 | 1 | 4 |
+| 2.3 — Binário → Decimal | 1 | 1 | 1 | 3 |
+| 3.1 — Mapeamento A–F | 1 | 1 | 1 | 3 |
+| 3.2 — Decimal → Hex | 1 | 1 | 1 | 3 |
+| 3.3 — Binário → Hex | 1 | 1 | 1 | 3 |
+| 4.1 — Eletrônica e Física | 2 | 1 | 0 | 3 |
+| 4.2 — Design Gráfico | 1 | 1 | 1 | 3 |
+| 4.3 — Redes de Computadores | 1 | 1 | 1 | 3 |
 
 ### Como Testar
 1. Acesse `/questoes` — se sem prática anterior, questões fáceis (badge verde)
 2. Responda corretamente → proficiência sobe → questões médias (badge amarelo)
-3. Após 3 questões respondidas, uma questão de nó fraco é inserida automaticamente
-4. O badge de dificuldade e o breadcrumb refletem dinamicamente a questão atual
+3. O badge de dificuldade e o breadcrumb refletem dinamicamente a questão atual
+4. Questões de nós fracos são priorizadas (weakBonus)
 
 ### Limitações
-- Pool pequeno (16 questões). Possibilidade de repetição em sessões longas.
-- Sem true quiz-bow (não modela conhecimento latente).
-- Sem rastreamento de tempo de resposta.
+- Pool de 37 questões para 12 nós (~3/nó). Para uso prolongado, ideal ~5+ por nível por nó.
+- Sem true quiz-bow (não modela conhecimento latente além do IRT simplificado).
 
 ---
 
-## 3. Feedback Adaptativo
+## 4. Classificação de Erros e Feedback Estratégico
 
 ### Objetivo
-Quando o aluno erra uma questão, exibir feedback que aponta exatamente qual conteúdo revisar, com link direto.
+Classificar o tipo de erro cometido pelo aluno e exibir feedback específico para cada situação.
 
 ### Arquivos
-- `components/ui/FeedbackToast.tsx` — toast com link adaptativo
-- `app/questoes/page.tsx` — passa `question.nodeId` ao toast
+- `hooks/useStudyPlan.ts` — função `classifyError()`
+- `components/ui/FeedbackToast.tsx` — toast com mensagem do tipo de erro
+- `app/questoes/page.tsx` — chamada da classificação no `handleConfirmAnswer`
+
+### Tipos de Erro
+
+| Tipo | Critério | Mensagem |
+|---|---|---|
+| `chute` | Resposta em < 3s | "Parece que você respondeu sem ler com atenção. Leia cada opção cuidadosamente." |
+| `distracao` | Resposta numericamente próxima (diferença ≤ 2) | "Você errou por pouco! Revise os detalhes do cálculo com atenção." |
+| `recorrente` | 2+ erros consecutivos no mesmo nó | "Este erro já ocorreu antes. Reveja o conteúdo e pratique mais." |
+| `conceitual` | Padrão não identificado | "Parece que você ainda não domina este conceito. Revise o conteúdo e tente novamente." |
 
 ### Fluxo de Execução
 ```
-[Aluno responde incorretamente]
-  → recordAttempt(nodeId, questionId, false)
-  → setFeedback("error")
-  → <FeedbackToast type="error" nodeId="2.2" proficiency={35} />
-  → Toast renderiza:
-      ✕ Resposta incorreta.
-      Proficiência atual: 35%
-      → Reveja "Decimal → Binário" (Nó 2.2)  ← link clicável
-  → Ao clicar no link → onClose() + navega para /tutoria/module-2?node=2.2
-```
-
-### API do Componente
-
-```typescript
-<FeedbackToast
-  type: "correct" | "error" | "hint" | null
-  onClose: () => void
-  proficiency?: number       // mostra "Proficiência atual: X%"
-  nodeId?: string            // quando presente + type="error", mostra link de revisão
-/>
+[Aluno erra questão]
+  → classifyError(nodeId, selected, correctAnswer, responseTimeMs, history)
+  → setErrorType(tipo)
+  → <FeedbackToast errorType={tipo} />
+  → Toast renderiza mensagem específica + link de revisão
 ```
 
 ### Como Testar
-1. Acesse `/questoes` e responda incorretamente
-2. Observe o toast: deve mostrar link "→ Reveja 'Nome do Nó' (Nó X.X)"
-3. Clique no link — deve navegar para a página de tutoria do nó específico
-4. Responda corretamente — toast sem link de revisão
+1. Responda muito rápido (< 3s) e erre → mensagem de "chute"
+2. Erre por 1 unidade de diferença (ex: resposta "127" em vez de "128") → "distração"
+3. Erre 3 vezes seguidas no mesmo nó → "recorrente"
+4. Demais erros → "conceitual"
 
 ---
 
-## 4. Dashboard de Revisão
+## 5. Detecção de Confusão e Desengajamento
 
 ### Objetivo
-No dashboard, listar nós com baixa proficiência para que o aluno saiba exatamente o que revisar.
+Identificar sinais de que o aluno está confuso ou desengajado e exibir intervenções.
+
+### Arquivo
+- `hooks/useStudyPlan.ts` — função `getConfusionStatus()`
+- `app/questoes/page.tsx` — exibição do aviso no sidebar
+
+### Regras de Detecção
+
+| Condição | Diagnóstico | Intervenção |
+|---|---|---|
+| 3+ erros consecutivos | Confusão | "Você errou 3 questões seguidas. Que tal revisar o conteúdo antes de continuar?" |
+| Tempo médio > 60s (últ. 5) | Dificuldade | "Você está demorando muito para responder. Considere revisar o tópico." |
+| < 2s + incorreto (múltiplos) | Chute | "Parece que você está respondendo muito rápido sem ler com atenção." |
+
+### Como Testar
+1. Erre 3 questões consecutivas — aviso laranja deve aparecer no sidebar
+2. Responda muito rápido e erre — aviso de chute
+3. Após acertar, o aviso desaparece
+
+---
+
+## 6. Plano de Estudo Personalizado
+
+### Objetivo
+Gerar uma lista priorizada de ações recomendadas com base na proficiência, revisões pendentes e histórico de erros.
+
+### Arquivo
+- `hooks/useStudyPlan.ts` — função `getStudyPlan()`
+- `app/dashboard/page.tsx` — seção "Plano de Estudo"
+
+### Algoritmo de Priorização
+
+```
+Para cada nó desbloqueado:
+  Se revisão vencida (SM-2) → prioridade 100
+  Se revisão próxima (≤ 2 dias) → prioridade 80
+  Se proficiência < 60 e não concluído → prioridade (80 - prof)
+  Se theta < -0.5 e não concluído → prioridade 60 + abs(theta)*10
+
+Para cada módulo:
+  Se todos nós com prof ≥ 60 → prioridade 20 (exame)
+
+Para cada nó:
+  Se desbloqueado, não concluído, 0 tentativas → prioridade 10 (estudo)
+
+Ordenar por prioridade decrescente, retornar top 5.
+```
+
+### Ações Disponível
+
+| Tipo | Ícone | Label | Link |
+|---|---|---|---|
+| `review` | 🔄 | Revisar | `/tutoria/[moduleId]?node=[nodeId]` |
+| `practice` | ✏️ | Praticar | `/tutoria/[moduleId]?node=[nodeId]` |
+| `study` | 📖 | Estudar | `/tutoria/[moduleId]?node=[nodeId]` |
+| `exam` | 🎯 | Fazer Exame | `/exame/[moduleId]` |
+| `next` | ➡️ | Avançar | `/tutoria/[moduleId]?node=[nodeId]` |
+
+### Como Testar
+1. Acesse `/dashboard` com dados de proficiência existentes
+2. A seção "Plano de Estudo" deve aparecer com ações priorizadas
+3. Clique em cada ação — deve navegar para a página correta
+4. Nós com revisão vencida aparecem com prioridade máxima
+
+---
+
+## 7. Dashboard de Revisão
+
+### Objetivo
+Exibir nós com baixa proficiência e revisões pendentes para o aluno saber exatamente o que revisar.
 
 ### Arquivos
-- `app/dashboard/page.tsx` — seção "Nós para Revisar"
+- `app/dashboard/page.tsx` — seções "Plano de Estudo", "Revisões Pendentes", "Nós para Revisar"
 - `hooks/useProficiency.ts` — método `getWeakNodes(threshold)`
+- `hooks/useSpacedRepetition.ts` — método `getDueReviews()`
 
-### Fluxo de Execução
-```
-[Dashboard renderiza]
-  → useProficiency().getWeakNodes(60)
-  → Filtra nós com score < 60 e não concluídos
-  → Ordena do mais fraco (menor score) para o menos fraco
-  → Renderiza cards com:
-      - Nó ID + label
-      - Barra de progresso laranja com %
-      - Botão "Estudar" → /tutoria/[moduleId]?node=[nodeId]
-      - Botão "Praticar" → /questoes
-  → Se nenhum nó fraco → seção não renderiza
-```
+### Seções do Dashboard
+
+1. **Plano de Estudo**: Ações recomendadas (top 5 priorizados)
+2. **Revisões Pendentes (SM-2)**: Nós com revisão vencida ou próxima
+3. **Mapa de Conhecimento**: Cards dos 4 módulos com status
+4. **Nós para Revisar**: Nós com proficiência < 60% e não concluídos
 
 ### Como Testar
-1. Responda algumas questões incorretamente para abaixar a proficiência
-2. Acesse `/dashboard`
-3. Deve aparecer a seção "Nós para Revisar" com os nós fracos
-4. Clique em "Estudar" — deve ir para a tutoria do nó
-5. Clique em "Praticar" — deve ir para as questões
-
-### Limitações
-- Threshold fixo em 60%. Não configurável pelo aluno.
-- A seção só considera nós não concluídos (completedNodes no localStorage).
+1. Responda questões incorretamente para abaixar a proficiência
+2. Acesse `/dashboard` — seção "Nós para Revisar" com nós fracos
+3. Aumente proficiência para >= 60 — seção some
+4. Verifique "Revisões Pendentes" com nós do SM-2
+5. Verifique "Plano de Estudo" com ações ordenadas
 
 ---
 
-## 5. Desbloqueio Baseado em Maestria
+## 8. Desbloqueio Baseado em Maestria
 
 ### Objetivo
-Vincular a progressão do curso à proficiência real do aluno. Só é possível completar um nó e avançar quando a proficiência atinge o mínimo necessário.
+Vincular a progressão do curso à proficiência real do aluno. *Inalterado desde a etapa anterior.*
 
 ### Arquivos
 - `hooks/useNodeProgress.ts` — `completeNode()`, `nodesInModuleReady()`
@@ -283,34 +421,6 @@ Vincular a progressão do curso à proficiência real do aluno. Só é possível
 | Exame do módulo disponível | `nodesInModuleReady(moduleId)` → todos nós com prof >= 60 |
 | Aprovação no exame | Score >= 70% |
 
-### Fluxo de Completação de Nó
-
-```
-[Aluno clica "Marcar como concluído e avançar" no /tutoria]
-  → handleCompleteAndNext()
-  → completeNode(nodeId)
-      → prof = getProficiency(nodeId)
-      → SE prof < 80 → return false
-      → Adiciona nodeId a completedNodes (localStorage)
-      → Auto-unlock próximo nó no mesmo módulo (se houver)
-      → Se todos nós do módulo concluídos → unlock primeiro nó do próximo módulo
-      → return true
-  → SE false → mostra aviso laranja com link "Praticar →"
-  → SE true → navega para próximo nó
-```
-
-### Diagnóstico no Exame
-
-Após o exame, o resultado agrupa as questões erradas por `nodeId`. Nós com acerto < 60% são listados em "Tópicos para Revisar" com link direto para a tutoria.
-
-### Como Testar
-1. Acesse `/tutoria/module-2?node=2.1` com proficiência baixa no nó
-2. Clique "Marcar como concluído" — deve mostrar aviso de proficiência insuficiente
-3. Pratique em `/questoes` até prof >= 80%
-4. Volte e marque como concluído — deve funcionar
-5. Complete todos os nós do módulo 2 → nó 3.1 desbloqueado automaticamente
-6. No dashboard, botão "Realizar teste" só aparece quando prof >= 60% em todos nós do módulo
-
 ---
 
 ## Estrutura Completa do localStorage
@@ -324,13 +434,23 @@ Após o exame, o resultado agrupa as questões erradas por `nodeId`. Nós com ac
       "correctAttempts": 0,
       "incorrectAttempts": 0,
       "history": [
-        { "questionId": "q2.2-1", "correct": true, "timestamp": 1719000000000 }
+        { "questionId": "q2.2-1", "correct": true, "timestamp": 1719000000000, "responseTimeMs": 12400 }
       ],
-      "lastPracticed": 0
+      "lastPracticed": 0,
+      "theta": 0
     }
   },
   "completedNodes": ["1.1", "1.2"],
-  "unlockedNodes": ["1.1", "1.2", "1.3", "2.1"]
+  "unlockedNodes": ["1.1", "1.2", "1.3", "2.1"],
+  "reviewSchedule": {
+    "<nodeId>": {
+      "interval": 6,
+      "ease": 2.5,
+      "repetitions": 1,
+      "nextReview": 1719604800000,
+      "lastReview": 1719000000000
+    }
+  }
 }
 ```
 
@@ -338,96 +458,127 @@ Após o exame, o resultado agrupa as questões erradas por `nodeId`. Nós com ac
 
 | Chave | Tipo | Descrição |
 |---|---|---|
-| `proficiencyData` | `Record<string, NodeProficiencyData>` | Dados de proficiência por nó |
+| `proficiencyData` | `Record<string, NodeProficiencyData>` | Dados de proficiência por nó (inclui theta e responseTimeMs) |
 | `completedNodes` | `string[]` | IDs dos nós concluídos |
 | `unlockedNodes` | `string[]` | IDs dos nós desbloqueados |
+| `reviewSchedule` | `Record<string, ReviewData>` | Dados SM-2 por nó |
 
 ---
 
 ## Fluxograma Textual do Sistema
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         /dashboard                          │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Mapa de Conhecimento (4 módulos × 3 nós)             │   │
-│  │ Cada ModuleCard → NodeCard (status + proficiência)   │   │
-│  │                                                      │   │
-│  │ Seção "Nós para Revisar" (prof < 60%)                │   │
-│  │   ├── "Estudar" → /tutoria/[moduleId]?node=[nodeId]  │   │
-│  │   └── "Praticar" → /questoes                         │   │
-│  └──────────────────────────────────────────────────────┘   │
-└────────────────────────┬────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         /dashboard                                  │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │ Plano de Estudo (ações priorizadas)                          │   │
+│  │ Revisões Pendentes (SM-2 — nós atrasados)                    │   │
+│  │ Mapa de Conhecimento (4 módulos × 3 nós)                     │   │
+│  │ Cada ModuleCard → NodeCard (status + proficiência)           │   │
+│  │                                                              │   │
+│  │ Seção "Nós para Revisar" (prof < 60%)                        │   │
+│  │   ├── "Estudar" → /tutoria/[moduleId]?node=[nodeId]          │   │
+│  │   └── "Praticar" → /questoes                                 │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└────────────────────────┬────────────────────────────────────────────┘
                          │
                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    /tutoria/[moduleId]                      │
-│  Sidebar: lista de nós do módulo (completado ✓ ou não)      │
-│  Conteúdo: HTML do nó atual (dangerouslyInnerHTML)          │
-│  Botão "Marcar como concluído" → completeNode()             │
-│    ├── prof >= 80 → completa + avança                       │
-│    └── prof < 80 → aviso "Pratique mais" + link /questoes   │
-│  Se todos nós completos → link "Realizar Teste"             │
-└────────────────────────┬────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    /tutoria/[moduleId]                              │
+│  Sidebar: lista de nós do módulo (completado ✓ ou não)              │
+│  Conteúdo: HTML do nó atual (dangerouslyInnerHTML)                  │
+│  Botão "Marcar como concluído" → completeNode()                     │
+│    ├── prof >= 80 → completa + avança                               │
+│    └── prof < 80 → aviso "Pratique mais" + link /questoes           │
+│  Se todos nós completos → link "Realizar Teste"                     │
+└────────────────────────┬────────────────────────────────────────────┘
                          │
                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      /questoes                              │
-│  selectNextQuestion() → algoritmo adaptativo:               │
-│    ├── prof < 40 → questões fáceis                          │
-│    ├── prof 40-70 → questões médias                         │
-│    └── prof > 70 → questões difíceis                        │
-│  A cada 3 questões → 1 de revisão de nó fraco               │
-│                                                             │
-│  [Aluno responde] → recordAttempt(nodeId, questionId, bool) │
-│    ├── Correto → toast verde, prof sobe (cálculo ponderado) │
-│    └── Errado → toast vermelho + "Reveja Nó X.X" (link)     │
-└────────────────────────┬────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      /questoes                                      │
+│  questionStartTimeRef = performance.now()                           │
+│  selectNextQuestion() → algoritmo adaptativo:                       │
+│    ├── prof < 40 → questões fáceis                                  │
+│    ├── prof 40-70 → questões médias                                 │
+│    └── prof > 70 → questões difíceis                                │
+│                                                                     │
+│  [Aluno responde] → responseTimeMs, difficulty                      │
+│  → recordAttempt(nodeId, qId, correct, responseTimeMs, difficulty)  │
+│      ├── Atualiza score bayesiano                                   │
+│      ├── Atualiza theta IRT                                         │
+│      └── Persiste proficiencyData                                   │
+│  → recordReview(nodeId, quality) → SM-2                             │
+│  → classifyError() → errorType                                      │
+│  → getConfusionStatus() → aviso se confuso                          │
+│  → <FeedbackToast type, errorType> → mensagem + link                │
+└────────────────────────┬────────────────────────────────────────────┘
                          │
                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    /exame/[moduleId]                        │
-│  10 questões de múltipla escolha                            │
-│  Resultado:                                                 │
-│    ├── Score >= 70% → "Parabéns"                            │
-│    ├── Score >= 80% → unlockFirstNode do próximo módulo     │
-│    ├── Diagnóstico por nó (acertos < 60% → link "Revisar")  │
-│    └── Revisão detalhada questão a questão                  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    /exame/[moduleId]                                │
+│  10 questões de múltipla escolha                                    │
+│  Resultado:                                                         │
+│    ├── Score >= 70% → "Parabéns"                                    │
+│    ├── Score >= 80% → unlockFirstNode do próximo módulo             │
+│    ├── Diagnóstico por nó (acertos < 60% → link "Revisar")          │
+│    └── Revisão detalhada questão a questão                          │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Casos de Teste Recomendados
 
-### Teste 1: Persistência de Proficiência
+### Teste 1: Persistência de Proficiência (Atualizado)
 1. Acesse `/questoes`, responda 3 questões
-2. Anote o score exibido
+2. Anote o score exibido e o theta
 3. Recarregue a página
-4. **Esperado**: mesmo score (com pequena variação por conta do `questionCount` resetar)
+4. **Esperado**: mesmo score e theta preservados
 
-### Teste 2: Seleção Adaptativa
-1. Com proficiência 0 em todos os nós, acesse `/questoes`
-2. **Esperado**: questão fácil (badge verde)
-3. Responda corretamente até prof > 40
-4. **Esperado**: questão média (badge amarelo)
-5. Continue até prof > 70
-6. **Esperado**: questão difícil (badge vermelho)
+### Teste 2: Tempo de Resposta e IRT
+1. Responda 1 questão rapidamente (< 10s) e corretamente
+2. Verifique `localStorage("proficiencyData")[nodeId].theta`
+3. **Esperado**: theta > 0 (positivo, desempenho acima da média)
+4. Responda 1 questão incorretamente
+5. **Esperado**: theta diminui
 
-### Teste 3: Feedback Adaptativo
+### Teste 3: SM-2 Spaced Repetition
+1. Responda uma questão corretamente
+2. Verifique `localStorage("reviewSchedule")[nodeId]`
+3. **Esperado**: `interval` = 1, `repetitions` = 1
+4. Responda outra do mesmo nó corretamente
+5. **Esperado**: `interval` = 6, `repetitions` = 2
+
+### Teste 4: Classificação de Erro
+1. Responda muito rápido (< 3s) e erre
+2. **Esperado**: toast com mensagem "Parece que você respondeu sem ler com atenção"
+3. Erre por 1 unidade de diferença (ex: responder "127" para "128")
+4. **Esperado**: toast com "Você errou por pouco!"
+
+### Teste 5: Detecção de Confusão
+1. Erre 3 questões consecutivas
+2. **Esperado**: aviso laranja no sidebar "Você errou 3 questões seguidas..."
+3. Após acertar 1 questão, o aviso desaparece
+
+### Teste 6: Plano de Estudo no Dashboard
+1. Tenha um nó com revisão vencida (SM-2) e outro com prof < 60
+2. Acesse `/dashboard`
+3. **Esperado**: seção "Plano de Estudo" com ações priorizadas
+4. **Esperado**: revisão vencida no topo, nó fraco abaixo
+
+### Teste 7: Feedback Adaptativo (Atualizado)
 1. Em `/questoes`, responda incorretamente
-2. **Esperado**: toast com link "→ Reveja 'Nome do Nó' (Nó X.X)"
-3. Clique no link
-4. **Esperado**: navega para `/tutoria/[moduleId]?node=[nodeId]`
+2. **Esperado**: toast com mensagem do tipo de erro + link "→ Reveja 'Nome do Nó' (Nó X.X)"
+3. Clique no link → navega para `/tutoria/[moduleId]?node=[nodeId]`
 
-### Teste 4: Dashboard de Revisão
+### Teste 8: Dashboard de Revisão (Atualizado)
 1. Com proficiência < 60 em algum nó, acesse `/dashboard`
 2. **Esperado**: seção "Nós para Revisar" visível
 3. Aumente proficiência do nó fraco para >= 60
 4. Recarregue `/dashboard`
 5. **Esperado**: seção "Nós para Revisar" some
 
-### Teste 5: Desbloqueio por Maestria
+### Teste 9: Desbloqueio por Maestria
 1. Acesse `/tutoria/module-2?node=2.1`
 2. Se prof < 80, clique "Marcar como concluído"
 3. **Esperado**: aviso laranja "Proficiência insuficiente" + link Praticar
@@ -436,57 +587,48 @@ Após o exame, o resultado agrupa as questões erradas por `nodeId`. Nós com ac
 6. Complete todos os 3 nós do módulo 2
 7. **Esperado**: nó 3.1 desbloqueado automaticamente
 
-### Teste 6: Exame com Diagnóstico
+### Teste 10: Exame com Diagnóstico
 1. Tenha prof >= 60 em todos nós de um módulo
 2. Acesse `/exame/[moduleId]`
 3. Complete o exame com alguns erros
 4. **Esperado**: seção "Tópicos para Revisar" com nós onde acertou < 60%
-5. Clique "Revisar" em um tópico
-6. **Esperado**: navega para a tutoria do nó
-
-### Teste 7: Exame não Disponível
-1. Tenha um nó com prof < 60 em um módulo
-2. Acesse `/dashboard`
-3. **Esperado**: botão "Realizar teste" NÃO aparece no ModuleCard
+5. Clique "Revisar" em um tópico → navega para a tutoria do nó
 
 ---
 
 ## Bugs e Limitações Conhecidas
 
 ### Bugs
-1. **Link do exame em /questoes**: Quando `nodeProficiency >= 80`, o link aponta para `/exame` (sem moduleId), que não existe como rota. Deveria apontar para `/exame/module-2`.
-2. **ExamQuestion.text**: O campo `text` não está na interface `ExamQuestion` (em `domain.ts`), mas os objetos em `domain-questions.ts` o possuem. A página `/exame/[id]` o acessa sem erro de tipo porque o TypeScript infere o tipo do array literal.
-3. **CompleteNode com stale state**: `completeNode` em `useNodeProgress` lê `completedNodes` e `unlockedNodes` do closure. Em cenários de cliques rápidos, pode haver race condition com o estado do React.
+1. **CompleteNode com stale state**: `completeNode` em `useNodeProgress` lê `completedNodes` e `unlockedNodes` do closure. Em cenários de cliques rápidos, pode haver race condition com o estado do React.
+2. **Classificação de erro de distração**: A detecção atual compara diferença numérica entre `selected` e `answer`. Pode falhar para opções não numéricas (sempre cai em "conceitual").
 
 ### Limitações
-1. **Pool de questões pequeno**: 16 questões práticas. Para uso prolongado, seria necessário expandir para ~5+ por nível por nó.
+1. **Pool de questões**: 37 questões práticas. Para uso prolongado, seria necessário expandir para ~5+ por nível por nó (12 nós → ~60+ questões).
 2. **Sem backend**: Toda lógica e dados ficam no navegador. Sem suporte a multi-usuário, analytics, ou recuperação de dados perdidos.
-3. **Algoritmo de proficiência simples**: Média ponderada sem modelo de conhecimento latente (IRT, BKT). Não infere conhecimento não-observado.
-4. **Sem spaced repetition**: Não agenda revisões baseadas em esquecimento (curva de Ebbinghaus).
-5. **Sem tempo de resposta**: Não considera tempo para responder como indicador de fluência.
-6. **Data loss**: Limpar localStorage ou usar navegação anônima perde todo progresso.
-7. **Módulos 3 e 4 sem questões**: Não há questões práticas ou de exame para os módulos 3 (Hexadecimal) e 4 (Aplicações).
+3. **IRT 1PL simplificado**: Não modela discriminação (parâmetro a) nem adivinhação (parâmetro c). O theta não é usado para desbloqueio.
+4. **SM-2 por questão individual**: O SM-2 é aplicado por tentativa individual. Idealmente deveria ser por nó com qualidade agregada da sessão.
+5. **Data loss**: Limpar localStorage ou usar navegação anônima perde todo progresso.
+6. **Theta não utilizado no sequenciamento**: O sequenciamento adaptativo atual usa apenas proficiência. Theta poderia ser usado para refinar a seleção de questões.
+7. **Confusão detectada apenas no erro**: A detecção de confusão só é executada após uma resposta incorreta. Não há monitoramento proativo durante a leitura de conteúdo.
 
 ---
 
 ## Próximos Passos Sugeridos
 
 ### Curto Prazo
-1. **Corrigir link do exame** em `/questoes`: `"/exame"` → `"/exame/module-2"` (hardcoded) ou dinâmico baseado no `nodeId`
-2. **Adicionar `text` ao `ExamQuestion`** em `domain.ts` para consistência de tipos
-3. **Expandir questões** para módulos 3 e 4 (mín. 9 questões cada: 3 por nível)
-4. **Adicionar questões de exame** para módulos 3 e 4
+1. **Expandir questões** para ~5 por nó (especialmente medium) para melhorar a confiabilidade das estimativas
+2. **Usar theta no sequenciamento**: Incorporar theta na `selectNextQuestion` para seleção mais refinada
+3. **Persistir tentativas de exame**: Salvar resultados de exames para diagnóstico longitudinal
 
 ### Médio Prazo
-5. **Implementar Knowledge Tracing**: Algoritmo BKT (Bayesian Knowledge Tracing) para estimar probabilidade de domínio não-observado
-6. **Adicionar API Routes** (Next.js): migrar persistência para banco de dados (SQLite/PostgreSQL + Prisma)
-7. **Spaced Repetition**: Implementar SM-2 (SuperMemo) para revisão espaçada de nós com proficiência borderline
+4. **SM-2 agregado por nó**: Acumular qualidade da sessão de prática antes de aplicar SM-2
+5. **Adicionar API Routes** (Next.js): migrar persistência para banco de dados (SQLite/PostgreSQL + Prisma)
+6. **Monitoramento durante leitura**: Detectar confusão também durante a leitura de conteúdo (tempo na página, interações)
 
 ### Longo Prazo
-8. **Autenticação**: Login multi-usuário com perfis de aprendizado
-9. **Dashboard Analítico**: Gráficos de evolução, tempo de estudo, taxa de acerto por nó
-10. **Gamificação**: Conquistas, streaks, leaderboard (opcional)
-11. **Geração procedural de questões**: Usar templates para criar variações infinitas de questões de conversão entre bases
+7. **Autenticação**: Login multi-usuário com perfis de aprendizado
+8. **Dashboard Analítico**: Gráficos de evolução do theta, taxa de acerto por dificuldade, tempo médio de resposta
+9. **Geração procedural de questões**: Usar templates para criar variações infinitas de questões de conversão entre bases
 
 ---
 
@@ -518,9 +660,10 @@ Question {
   moduleId?: string;    // "1", "2"...
   nodeId: string;       // ligação ao DomainNode
   text: string;         // enunciado
-  answer: string;       // resposta exata (case-insensitive)
+  options: string[];    // opções de múltipla escolha
+  answer: string;       // opção correta
   hints: string[];      // dicas progressivas
-  explanation: string;  // explicacao pós-resposta
+  explanation: string;  // explicação pós-resposta
   difficulty: Difficulty;
 }
 
@@ -528,8 +671,41 @@ ExamQuestion {
   id: string;           // "exam-1-1"
   moduleId: string;     // "module-1"
   nodeId: string;       // ligação ao DomainNode
+  text: string;         // enunciado
   answer: string;       // texto da opção correta
   options: string[];    // 4 opções de múltipla escolha
+}
+
+// SM-2 Spaced Repetition
+ReviewData {
+  interval: number;       // dias até próxima revisão
+  ease: number;          // ease factor (mín 1.3)
+  repetitions: number;   // repetições bem-sucedidas consecutivas
+  nextReview: number;    // timestamp (ms) da próxima revisão
+  lastReview: number;    // timestamp (ms) da última revisão
+}
+
+// Plano de Estudo
+StudyPlanAction = "review" | "practice" | "study" | "exam" | "next"
+
+StudyPlanItem {
+  action: StudyPlanAction;
+  nodeId: string;
+  moduleId: string;
+  nodeLabel: string;
+  moduleNumber: number;
+  priority: number;       // 0-100, maior = mais urgente
+  reason: string;         // legível para exibição
+}
+
+ErrorType = "conceitual" | "distracao" | "recorrente" | "chute" | null
+
+ConfusionStatus {
+  confused: boolean;
+  reason: string | null;      // legível para exibição
+  consecutiveErrors: number;
+  avgResponseTime: number;    // ms (últimas 3)
+  hintDependency: boolean;
 }
 ```
 
@@ -539,7 +715,8 @@ ExamQuestion {
 AttemptRecord {
   questionId: string;
   correct: boolean;
-  timestamp: number;    // Date.now()
+  timestamp: number;        // Date.now()
+  responseTimeMs?: number;  // tempo de resposta (novo)
 }
 
 NodeProficiencyData {
@@ -549,5 +726,16 @@ NodeProficiencyData {
   incorrectAttempts: number;
   history: AttemptRecord[];
   lastPracticed: number;      // timestamp
+  theta: number;              // IRT ability estimate (novo)
 }
+```
+
+```typescript
+// lib/domain.ts — IRT
+
+DIFFICULTY_VALUE: Record<Difficulty, number> = {
+  easy: -1,
+  medium: 0,
+  hard: 1,
+};
 ```

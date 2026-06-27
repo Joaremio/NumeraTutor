@@ -69,7 +69,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
           {/* ACTIONS */}
           <div className="flex gap-2">
             <Link
-              href={`/tutoria/module-${module.number}`}
+              href={`/tutoria/${module.id}`}
               className="text-xs font-medium text-slate-400 hover:text-violet-400
               py-1.5 px-3 rounded-lg border border-slate-700
               hover:border-violet-500/50 transition-all"

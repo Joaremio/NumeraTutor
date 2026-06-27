@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
 import HintPanel from "@/components/ui/HintPanel";
 import FeedbackToast, { FeedbackType } from "@/components/ui/FeedbackToast";
 import NodeProgressCircle from "@/components/ui/NodeProgressCircle";
 import { QUESTIONS } from "@/lib/domain-questions";
 import { MODULES } from "@/lib/domain";
+import type { Question, ErrorType } from "@/lib/domain";
 import { useProficiency } from "@/hooks/useProficiency";
-import type { Question } from "@/lib/domain";
+import { useNodeProgress } from "@/hooks/useNodeProgress";
+import { useSpacedRepetition, computeQuality } from "@/hooks/useSpacedRepetition";
+import { useStudyPlan } from "@/hooks/useStudyPlan";
 
 function getNodeInfo(nodeId: string) {
   for (const module of MODULES) {
@@ -51,82 +55,159 @@ function selectNextQuestion(
 
 export default function TutoringPage() {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<FeedbackType>(null);
-  const [showSolutionWarning, setShowSolutionWarning] = useState(false);
   const [solvedIds, setSolvedIds] = useState<Set<string>>(new Set());
   const [questionCount, setQuestionCount] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [errorType, setErrorType] = useState<ErrorType>(null);
+  const [confused, setConfused] = useState(false);
+  const [confusedReason, setConfusedReason] = useState<string | null>(null);
 
-  const { getProficiency, recordAttempt, hydrated } = useProficiency();
+  const questionStartTimeRef = useRef<number>(0);
+
+  const { getProficiency, recordAttempt, hydrated: profHydrated } = useProficiency();
+  const { isUnlocked, hydrated: progressHydrated, nodesInModuleReady } = useNodeProgress();
+  const { recordReview } = useSpacedRepetition();
+  const { classifyError, getConfusionStatus, getStudyPlan } = useStudyPlan();
+
+  const hydrated = profHydrated && progressHydrated;
+
+  const availableQuestions = useMemo(
+    () => QUESTIONS.filter((q) => isUnlocked(q.nodeId)),
+    [isUnlocked],
+  );
 
   useEffect(() => {
-    if (hydrated && !currentQuestion) {
-      const first = selectNextQuestion(new Set(), getProficiency, QUESTIONS);
+    if (hydrated && !currentQuestion && !exhausted) {
+      const first = selectNextQuestion(
+        new Set(),
+        getProficiency,
+        availableQuestions,
+      );
       if (first) setCurrentQuestion(first);
+      else setExhausted(true);
     }
-  }, [hydrated, currentQuestion, getProficiency]);
+  }, [hydrated, currentQuestion, getProficiency, availableQuestions, exhausted]);
 
   const question = currentQuestion;
   const isSolved = question ? solvedIds.has(question.id) : false;
   const nodeProficiency = question ? getProficiency(question.nodeId) : 0;
   const nodeInfo = question ? getNodeInfo(question.nodeId) : null;
 
-  const handleSubmit = () => {
-    if (!question || !answer.trim()) return;
-    const isCorrect =
-      answer.trim().toLowerCase() === question.answer.toLowerCase();
+  const advanceToNext = useCallback(() => {
+    if (!question) return;
+    const next = selectNextQuestion(
+      solvedIds,
+      getProficiency,
+      availableQuestions,
+      question.id,
+    );
+    if (next) {
+      setCurrentQuestion(next);
+      setSelected(null);
+      setConfirmed(false);
+      setFeedback(null);
+      setErrorType(null);
+      setConfused(false);
+      setConfusedReason(null);
+      setQuestionCount((c) => c + 1);
+      questionStartTimeRef.current = performance.now();
+    } else {
+      setExhausted(true);
+    }
+  }, [question, solvedIds, getProficiency, availableQuestions]);
 
-    recordAttempt(question.nodeId, question.id, isCorrect);
+  const handleConfirmAnswer = () => {
+    if (!question || !selected) return;
+    const isCorrect = selected === question.answer;
+    const responseTimeMs = Math.round(performance.now() - questionStartTimeRef.current);
+
+    // Registra tentativa com tempo de resposta e dificuldade (IRT)
+    recordAttempt(question.nodeId, question.id, isCorrect, responseTimeMs, question.difficulty);
+
+    // SM-2: registra revisão com qualidade baseada em desempenho e tempo
+    const quality = computeQuality(isCorrect, responseTimeMs, false);
+    recordReview(question.nodeId, quality);
+
+    setConfirmed(true);
 
     if (isCorrect) {
       setFeedback("correct");
       setSolvedIds((s) => new Set(s).add(question.id));
+      setErrorType(null);
     } else {
+      // Classifica o tipo de erro
+      const history = solvedIds.size > 0
+        ? [{ correct: false }]
+        : [];
+      const errType = classifyError(
+        question.nodeId,
+        selected,
+        question.answer,
+        responseTimeMs,
+        history,
+      );
+      setErrorType(errType);
       setFeedback("error");
+
+      // Detecta confusão/desengajamento
+      const recentHistory = [{ correct: false, responseTimeMs }];
+      const status = getConfusionStatus(question.nodeId, recentHistory);
+      if (status.confused) {
+        setConfused(true);
+        setConfusedReason(status.reason);
+      }
     }
-    setAnswer("");
   };
+
+  useEffect(() => {
+    setSelected(null);
+    setConfirmed(false);
+    setErrorType(null);
+    setConfused(false);
+    setConfusedReason(null);
+    questionStartTimeRef.current = performance.now();
+  }, [currentQuestion]);
 
   const handleHintUsed = useCallback(() => {
     setFeedback("hint");
   }, []);
 
-  const handleShowSolution = () => {
-    if (!question) return;
-    recordAttempt(question.nodeId, question.id, false);
-    setFeedback("error");
-    setShowSolutionWarning(false);
-    setAnswer(question.answer);
-  };
-
-  const handleNext = () => {
-    if (!question) return;
-    const next = selectNextQuestion(
-      solvedIds,
-      getProficiency,
-      QUESTIONS,
-      question.id,
-    );
-    if (next) {
-      setCurrentQuestion(next);
-      setAnswer("");
-      setFeedback(null);
-      setShowSolutionWarning(false);
-      setQuestionCount((c) => c + 1);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSubmit();
-  };
-
   const progressStatus =
     nodeProficiency >= 80 ? "completed" : "in_progress";
 
-  if (!hydrated || !question) {
+  if (!hydrated) {
     return (
       <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-slate-400">
         Carregando questões...
+      </div>
+    );
+  }
+
+  if (exhausted || !question) {
+    return (
+      <div className="min-h-screen bg-[#0F172A]">
+        <AppHeader />
+        <main className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-400">
+          <p className="text-lg">
+            {availableQuestions.length === 0
+              ? "Nenhuma questão disponível no momento."
+              : "Você já respondeu todas as questões disponíveis."}
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            {availableQuestions.length === 0
+              ? "Complete os módulos anteriores para desbloquear mais conteúdo e questões."
+              : "Volte mais tarde para novas questões ou revise o conteúdo."}
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-6 inline-block text-sm font-medium text-violet-400 hover:text-violet-300"
+          >
+            Voltar ao Dashboard →
+          </Link>
+        </main>
       </div>
     );
   }
@@ -187,13 +268,13 @@ export default function TutoringPage() {
               </div>
 
               {/* Exam ready CTA */}
-              {nodeProficiency >= 80 && (
-                <a
-                  href="/exame"
+              {nodeInfo && nodesInModuleReady(nodeInfo.module.id) && (
+                <Link
+                  href={`/exame/${nodeInfo.module.id}`}
                   className="mt-4 block w-full text-center text-xs font-semibold btn-primary py-2.5"
                 >
                   Realizar Exame do Módulo →
-                </a>
+                </Link>
               )}
             </div>
 
@@ -222,22 +303,32 @@ export default function TutoringPage() {
               </div>
             </div>
 
+            {/* Confusion warning */}
+            {confused && (
+              <div className="p-3 rounded-xl border border-orange-500/30 bg-orange-500/10 animate-fade-in">
+                <p className="text-xs text-orange-300 leading-relaxed">
+                  {confusedReason}
+                </p>
+              </div>
+            )}
+
             {/* Nav between questions */}
-            <button
-              onClick={handleNext}
-              className="w-full btn-secondary text-sm"
-            >
-              Próxima questão →
-            </button>
+            {confirmed && (
+              <button
+                onClick={advanceToNext}
+                className="w-full btn-secondary text-sm"
+              >
+                Próxima questão →
+              </button>
+            )}
           </aside>
 
-          {/* RIGHT: Question + Answer */}
+          {/* RIGHT: Question + Options */}
           <section
             className="lg:col-span-2 space-y-4 animate-slide-up"
             style={{ animationDelay: "0.1s" }}
             key={question.id}
           >
-            {/* <QuestionCard /> */}
             <div className="card p-6">
               {/* Breadcrumb */}
               <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-5">
@@ -284,61 +375,81 @@ export default function TutoringPage() {
                 </p>
               </div>
 
-              {/* <AnswerInput /> */}
-              <div className="space-y-3">
-                <label className="block text-xs font-medium text-slate-400">
-                  Sua resposta
-                </label>
-                <input
-                  type="text"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Digite aqui..."
-                  className="input-field"
-                  aria-label="Campo de resposta"
-                />
+              {/* Multiple choice options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                {question.options.map((opt) => {
+                  const isSelected = selected === opt;
+                  const isCorrectOpt = opt === question.answer;
+                  const showResult = confirmed;
 
-                <div className="flex gap-3">
+                  let optClass =
+                    "card p-4 text-left font-mono text-base font-semibold transition-all duration-200 border-2 ";
+
+                  if (showResult) {
+                    if (isCorrectOpt)
+                      optClass +=
+                        "border-emerald-500 bg-emerald-500/10 text-emerald-300";
+                    else if (isSelected && !isCorrectOpt)
+                      optClass += "border-red-500 bg-red-500/10 text-red-400";
+                    else optClass += "border-slate-700 text-slate-600";
+                  } else {
+                    optClass += isSelected
+                      ? "border-violet-500 bg-violet-500/15 text-violet-200 glow-violet"
+                      : "border-slate-700 text-slate-300 hover:border-violet-500/50 hover:text-slate-100 cursor-pointer";
+                  }
+
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => !confirmed && setSelected(opt)}
+                      className={optClass}
+                      disabled={confirmed}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Confirm / Next button */}
+              <div className="flex gap-3">
+                {!confirmed ? (
                   <button
-                    onClick={handleSubmit}
-                    disabled={!answer.trim()}
-                    className="flex-1 btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={handleConfirmAnswer}
+                    disabled={!selected}
+                    className="flex-1 btn-primary py-3 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Confirmar Resposta
                   </button>
-
-                  {!showSolutionWarning ? (
-                    <button
-                      onClick={() => setShowSolutionWarning(true)}
-                      className="btn-danger text-sm px-4"
-                    >
-                      Ver Solução
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleShowSolution}
-                      className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-500 text-white transition-colors"
-                    >
-                      Confirmar
-                    </button>
-                  )}
-                </div>
-
-                {showSolutionWarning && (
-                  <p className="text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2 animate-fade-in">
-                    ⚠ Ver a solução contará como erro na sua proficiência.
-                  </p>
+                ) : (
+                  <button
+                    onClick={advanceToNext}
+                    className="flex-1 btn-primary py-3"
+                  >
+                    {isSolved
+                      ? "Próxima questão →"
+                      : "Próxima questão →"}
+                  </button>
                 )}
               </div>
+
+              {/* Result feedback */}
+              {confirmed && (
+                <div
+                  className={`mt-4 p-4 rounded-xl border text-sm animate-fade-in ${
+                    isSolved
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                      : "bg-red-500/10 border-red-500/30 text-red-300"
+                  }`}
+                >
+                  {isSolved
+                    ? "✓ Correto!"
+                    : `✕ Resposta correta: ${question.answer}`}
+                </div>
+              )}
             </div>
 
-            {/* <HintPanel /> */}
-            <div className="card p-5">
-              <HintPanel hints={question.hints} onHintUsed={handleHintUsed} />
-            </div>
-
-            {/* Explanation (shown after solve) */}
+            {/* Explanation (shown after correct solve) */}
             {isSolved && (
               <div className="card p-5 border-emerald-500/30 bg-emerald-500/5 animate-slide-up">
                 <p className="text-xs font-medium text-emerald-400 mb-2">
@@ -349,6 +460,11 @@ export default function TutoringPage() {
                 </p>
               </div>
             )}
+
+            {/* <HintPanel /> */}
+            <div className="card p-5">
+              <HintPanel hints={question.hints} onHintUsed={handleHintUsed} />
+            </div>
           </section>
         </div>
       </main>
@@ -356,9 +472,10 @@ export default function TutoringPage() {
       {/* <FeedbackToast /> */}
       <FeedbackToast
         type={feedback}
-        onClose={() => setFeedback(null)}
+        onClose={() => { setFeedback(null); setConfused(false); }}
         proficiency={nodeProficiency}
         nodeId={question.nodeId}
+        errorType={errorType}
       />
     </div>
   );

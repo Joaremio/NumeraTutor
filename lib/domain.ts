@@ -23,6 +23,7 @@ export interface Question {
   moduleId?: string;
   nodeId: string;
   text: string;
+  options: string[];
   answer: string;
   hints: string[];
   explanation: string;
@@ -33,8 +34,57 @@ export interface ExamQuestion {
   id: string;
   moduleId: string;
   nodeId: string;
+  text: string;
   answer: string;
   options: string[];
+}
+
+// ============================
+// Modelo do Estudante — SM-2 (Spaced Repetition)
+// ============================
+
+export interface ReviewData {
+  interval: number;       // dias até a próxima revisão
+  ease: number;          // ease factor (mín 1.3)
+  repetitions: number;   // repetições bem-sucedidas consecutivas
+  nextReview: number;    // timestamp (ms) da próxima revisão
+  lastReview: number;    // timestamp (ms) da última revisão
+}
+
+// ============================
+// Modelo do Estudante — IRT (Theta)
+// ============================
+
+export const DIFFICULTY_VALUE: Record<Difficulty, number> = {
+  easy: -1,
+  medium: 0,
+  hard: 1,
+};
+
+// ============================
+// Modelo Tutor — Plano de Estudo
+// ============================
+
+export type StudyPlanAction = "review" | "practice" | "study" | "exam" | "next";
+
+export interface StudyPlanItem {
+  action: StudyPlanAction;
+  nodeId: string;
+  moduleId: string;
+  nodeLabel: string;
+  moduleNumber: number;
+  priority: number;       // 0-100, maior = mais urgente
+  reason: string;         // legível para exibição
+}
+
+export type ErrorType = "conceitual" | "distracao" | "recorrente" | "chute" | null;
+
+export interface ConfusionStatus {
+  confused: boolean;
+  reason: string | null;      // legível para exibição
+  consecutiveErrors: number;
+  avgResponseTime: number;    // ms (últimas 3)
+  hintDependency: boolean;
 }
 
 // ============================

@@ -4,8 +4,11 @@ import Link from "next/link";
 import AppHeader from "@/components/layout/AppHeader";
 import ModuleCard from "@/components/ui/ModuleCard";
 import { MODULES } from "@/lib/domain";
+import type { StudyPlanAction } from "@/lib/domain";
 import { useNodeProgress } from "@/hooks/useNodeProgress";
 import { useProficiency } from "@/hooks/useProficiency";
+import { useSpacedRepetition } from "@/hooks/useSpacedRepetition";
+import { useStudyPlan } from "@/hooks/useStudyPlan";
 
 function getNodeModule(nodeId: string) {
   for (const module of MODULES) {
@@ -19,6 +22,8 @@ function getNodeModule(nodeId: string) {
 export default function DashboardPage() {
   const { isCompleted, hydrated } = useNodeProgress();
   const { getWeakNodes, hydrated: profHydrated } = useProficiency();
+  const { getDueReviews, hydrated: reviewHydrated } = useSpacedRepetition();
+  const { getStudyPlan } = useStudyPlan();
 
   // 🔒 evita hydration mismatch
   if (!hydrated) {
@@ -95,6 +100,122 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* ESTUDO PLANO — Ações Prioritárias */}
+        {hydrated && profHydrated && reviewHydrated && (() => {
+          const plan = getStudyPlan();
+          if (plan.length === 0) return null;
+          const actionIcons: Record<StudyPlanAction, string> = {
+            review: "🔄",
+            practice: "✏️",
+            study: "📖",
+            exam: "🎯",
+            next: "➡️",
+          };
+          const actionLabels: Record<StudyPlanAction, string> = {
+            review: "Revisar",
+            practice: "Praticar",
+            study: "Estudar",
+            exam: "Fazer Exame",
+            next: "Avançar",
+          };
+          return (
+            <section className="mt-8 animate-slide-up">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🎯</span>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100">
+                    Plano de Estudo
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Ações recomendadas com base no seu desempenho
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {plan.map((item) => {
+                  const href =
+                    item.action === "exam"
+                      ? `/exame/${item.moduleId}`
+                      : `/tutoria/${item.moduleId}?node=${item.nodeId}`;
+                  return (
+                    <Link
+                      key={`${item.action}-${item.nodeId}`}
+                      href={href}
+                      className="card p-3 flex items-center gap-3 hover:border-violet-500/30 transition-all"
+                    >
+                      <span className="text-lg">{actionIcons[item.action]}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-500">
+                          {actionLabels[item.action]} · Módulo {item.moduleNumber}
+                        </p>
+                        <p className="text-sm font-medium text-slate-200 truncate">
+                          {item.nodeLabel}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {item.reason}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* REVISÕES PENDENTES (SM-2) */}
+        {hydrated && ((() => {
+          const dueReviews = getDueReviews();
+          if (dueReviews.length === 0) return null;
+          const allNodes = MODULES.flatMap((m) =>
+            m.nodes.map((n) => ({ nodeId: n.id, label: n.label, moduleNumber: m.number, moduleId: m.id }))
+          );
+          return (
+            <section className="mt-6 animate-slide-up">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">📅</span>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-100">
+                    Revisões Pendentes
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Conteúdos que precisam de revisão segundo o algoritmo SM-2
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {dueReviews.slice(0, 4).map(({ nodeId, data }) => {
+                  const nodeInfo = allNodes.find((n) => n.nodeId === nodeId);
+                  if (!nodeInfo) return null;
+                  const daysOverdue = Math.round((Date.now() - data.nextReview) / 86400000);
+                  return (
+                    <Link
+                      key={nodeId}
+                      href={`/tutoria/${nodeInfo.moduleId}?node=${nodeId}`}
+                      className="card p-3 flex items-center gap-3 hover:border-orange-500/30 transition-all"
+                    >
+                      <span className="text-lg">🔄</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-orange-400">
+                          {daysOverdue > 0
+                            ? `Atrasado ${daysOverdue} dia${daysOverdue > 1 ? "s" : ""}`
+                            : "Revisar hoje"}
+                        </p>
+                        <p className="text-sm font-medium text-slate-200 truncate">
+                          Nó {nodeId} — {nodeInfo.label}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          Módulo {nodeInfo.moduleNumber}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })())}
 
         {/* MODULES */}
         <div className="flex flex-col items-center gap-0 animate-fade-in">
