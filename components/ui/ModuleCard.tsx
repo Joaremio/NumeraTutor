@@ -30,7 +30,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
     <div className="relative flex flex-col items-center w-full ">
       {/* MODULE CARD */}
       <div
-        className={`w-full max-w-3xl rounded-3xl border ${module.borderColor}
+        className={`w-full max-w-3xl mt-6 rounded-3xl border ${module.borderColor}
         bg-gradient-to-br ${module.color} p-6 transition-all duration-300
         ${allLocked ? "opacity-60" : ""}`}
       >
