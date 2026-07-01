@@ -27,7 +27,7 @@ export default function ModuleCard({ module, isLast }: ModuleCardProps) {
   const moduleReady = nodesInModuleReady(module.id);
 
   return (
-    <div className="relative flex flex-col items-center w-full">
+    <div className="relative flex flex-col items-center w-full ">
       {/* MODULE CARD */}
       <div
         className={`w-full max-w-3xl rounded-3xl border ${module.borderColor}

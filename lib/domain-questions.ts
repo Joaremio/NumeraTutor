@@ -60,6 +60,47 @@ export const QUESTIONS: Question[] = [
       "O zero é essencial como marcador de posição. Sem ele, sistemas posicionais não funcionam corretamente, tornando cálculos complexos muito difíceis.",
     difficulty: "hard",
   },
+  {
+    id: "q1.1-4",
+    moduleId: "1",
+    nodeId: "1.1",
+    text: "Qual foi a principal contribuição do sistema de numeração hindu-arábico em relação aos sistemas antigos?",
+    options: [
+      "Utilizar apenas letras para representar números",
+      "Introduzir o sistema posicional com o uso do zero",
+      "Adotar a base 60 para todos os cálculos",
+      "Eliminar completamente a necessidade de símbolos numéricos",
+    ],
+    answer: "Introduzir o sistema posicional com o uso do zero",
+    hints: [
+      "É o sistema que utilizamos atualmente.",
+      "Ele combina valor posicional com um símbolo que representa a ausência de quantidade.",
+    ],
+    explanation:
+      "O sistema hindu-arábico revolucionou a matemática ao introduzir o sistema decimal posicional e o número zero, tornando operações matemáticas muito mais eficientes.",
+    difficulty: "easy",
+  },
+  {
+    id: "q1.1-5",
+    moduleId: "1",
+    nodeId: "1.1",
+    text: "Por que os sistemas de numeração posicionais são mais eficientes para realizar operações matemáticas do que sistemas como o romano?",
+    options: [
+      "Porque utilizam menos símbolos diferentes",
+      "Porque permitem que o valor de um algarismo dependa de sua posição, facilitando algoritmos de cálculo",
+      "Porque representam apenas números inteiros",
+      "Porque não utilizam símbolos repetidos",
+    ],
+    answer:
+      "Porque permitem que o valor de um algarismo dependa de sua posição, facilitando algoritmos de cálculo",
+    hints: [
+      "Pense em como fazemos contas de soma e multiplicação hoje.",
+      "O valor de um mesmo algarismo muda conforme a casa decimal em que ele está.",
+    ],
+    explanation:
+      "Nos sistemas posicionais, o valor de cada algarismo depende da posição que ocupa. Essa característica permite criar algoritmos eficientes para operações como soma, subtração, multiplicação e divisão, algo muito mais difícil em sistemas não posicionais como o romano.",
+    difficulty: "hard",
+  },
 
   // ==========================================
   // NÓ 1.2 – Conceito de Base Numérica
@@ -119,6 +160,41 @@ export const QUESTIONS: Question[] = [
       "São 12 símbolos distintos (0-9, A, B), portanto base 12. Conhecido como sistema duodecimal.",
     difficulty: "hard",
   },
+  {
+    id: "q1.2-4",
+    moduleId: "1",
+    nodeId: "1.2",
+    text: "Qual é o maior dígito permitido em um sistema de numeração de base 5?",
+    options: ["3", "4", "5", "6"],
+    answer: "4",
+    hints: [
+      "Em uma base N, os dígitos vão de 0 até N-1.",
+      "Se a base é 5, qual é o último dígito permitido?",
+    ],
+    explanation:
+      "Em um sistema de base 5, os dígitos válidos são 0, 1, 2, 3 e 4. O maior dígito sempre é igual à base menos 1.",
+    difficulty: "easy",
+  },
+  {
+    id: "q1.2-5",
+    moduleId: "1",
+    nodeId: "1.2",
+    text: "Por que o número 219 não pode pertencer a um sistema de base 8?",
+    options: [
+      "Porque possui três algarismos",
+      "Porque o dígito 9 não existe na base 8",
+      "Porque a base 8 só representa números pares",
+      "Porque o dígito 2 não pode aparecer antes do 1",
+    ],
+    answer: "Porque o dígito 9 não existe na base 8",
+    hints: [
+      "Quais são os dígitos permitidos na base 8?",
+      "Verifique se todos os algarismos do número são válidos.",
+    ],
+    explanation:
+      "Na base 8, apenas os dígitos de 0 a 7 são permitidos. Como o número 219 contém o dígito 9, ele não pode ser representado nesse sistema de numeração.",
+    difficulty: "medium",
+  },
 
   // ==========================================
   // NÓ 1.3 – Notação Posicional e Pesos
@@ -171,6 +247,36 @@ export const QUESTIONS: Question[] = [
     ],
     explanation:
       "A primeira posição fracionária tem peso B⁻¹ = 1/B. Em decimal: 10⁻¹ = 0,1 (décimos). Em binário: 2⁻¹ = 0,5 (metades).",
+    difficulty: "hard",
+  },
+  {
+    id: "q1.3-4",
+    moduleId: "1",
+    nodeId: "1.3",
+    text: "Qual é o valor representado pelo algarismo 5 no número decimal 5.482?",
+    options: ["5", "50", "500", "5000"],
+    answer: "5000",
+    hints: [
+      "Observe a posição do algarismo 5.",
+      "Ele está na casa dos milhares, cujo peso é 10³.",
+    ],
+    explanation:
+      "No número 5.482, o algarismo 5 ocupa a casa dos milhares. Seu peso é 10³ = 1000, portanto representa 5 × 1000 = 5000.",
+    difficulty: "easy",
+  },
+  {
+    id: "q1.3-5",
+    moduleId: "1",
+    nodeId: "1.3",
+    text: "Qual é o valor decimal do número 132 na base 4?",
+    options: ["24", "30", "34", "36"],
+    answer: "30",
+    hints: [
+      "Multiplique cada algarismo pelo peso da sua posição.",
+      "Os pesos da base 4 são: 4², 4¹ e 4⁰.",
+    ],
+    explanation:
+      "132₄ = 1×4² + 3×4¹ + 2×4⁰ = 1×16 + 3×4 + 2×1 = 16 + 12 + 2 = 30.",
     difficulty: "hard",
   },
 
@@ -283,8 +389,7 @@ export const QUESTIONS: Question[] = [
       "100÷2=50r0, 50÷2=25r0, 25÷2=12r1, 12÷2=6r0, 6÷2=3r0, 3÷2=1r1, 1÷2=0r1.",
       "Leia os restos de baixo para cima.",
     ],
-    explanation:
-      "100 em binário é 1100100. Verifique: 64+32+0+0+4+0+0 = 100 ✓",
+    explanation: "100 em binário é 1100100. Verifique: 64+32+0+0+4+0+0 = 100 ✓",
     difficulty: "hard",
   },
 
@@ -326,10 +431,7 @@ export const QUESTIONS: Question[] = [
     text: "Qual o valor decimal do binário 10000000 (1 byte com o MSB ativado)?",
     options: ["64", "127", "128", "256"],
     answer: "128",
-    hints: [
-      "O bit mais à esquerda em um byte representa 2⁷.",
-      "2⁷ = 128.",
-    ],
+    hints: ["O bit mais à esquerda em um byte representa 2⁷.", "2⁷ = 128."],
     explanation:
       "10000000₂ = 1×2⁷ = 128. É o bit de maior peso (MSB) em um byte.",
     difficulty: "hard",
@@ -584,12 +686,7 @@ export const QUESTIONS: Question[] = [
     moduleId: "4",
     nodeId: "4.2",
     text: "Quantas cores diferentes podem ser representadas no sistema RGB 24-bit (True Color)?",
-    options: [
-      "65.536",
-      "16.777.216",
-      "1.048.576",
-      "256",
-    ],
+    options: ["65.536", "16.777.216", "1.048.576", "256"],
     answer: "16.777.216",
     hints: [
       "True Color usa 8 bits por canal: 8+8+8 = 24 bits por pixel.",
